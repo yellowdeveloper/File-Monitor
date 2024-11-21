@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <dirent.h>
+#include <gtk/gtk.h>
 
 // define error code
 #define EXT_SUCCESS 0
@@ -32,6 +33,7 @@ int emailEnabled = 0; // email notificaton activate status
 const char* emailRecipient = NULL; // email receiver
 const char* logFilePath = NULL; // log file path
 time_t lastEventTime = 0; // last event occur time
+GtkTextBuffer *log_buffer = NULL; // log text buffer
 
 // recurrent function and log file size check
 void rotate_log_file(const char* logPath) {
@@ -46,6 +48,21 @@ void rotate_log_file(const char* logPath) {
         exit(EXIT_FAILURE);
     }
     printf("Log file created/opened at: %s\n", logPath); // 디버깅 메시지
+}
+
+// event logging function
+void log_event(const char* eventMessage) {
+    if (log_buffer) {
+        GtkTextIter end;
+        gtk_text_buffer_get_end_iter(log_buffer, &end);
+        gtk_text_buffer_insert(log_buffer, &end, eventMessage, -1);
+        gtk_text_buffer_insert(log_buffer, &end, "\n", -1);
+    }
+    
+    if (logFile) {
+         fprintf(logFile, "Event: %s\n", eventMessage); 
+        fflush(logFile);
+    }
 }
 
 // signal handle function: clean up after program ends
@@ -64,22 +81,6 @@ void signal_handler(int signal) {
     }
 
     exit(EXIT_SUCCESS);
-}
-
-// event writing functiion (log)
-void log_event(const char* eventMessage) {
-    if (logFile) {
-        fprintf(logFile, "Event: %s\n", eventMessage); // write event message
-        fflush(logFile); // write to file buffer
-    }
-}
-
-// error writing function (log)
-void log_error(const char* message) {
-    if (logFile) {
-        fprintf(logFile, "Error: %s\n", message); // write error message
-        fflush(logFile); // close log file
-    }
 }
 
 // event handle fucntion
@@ -129,12 +130,35 @@ void process_event(const struct inotify_event* watchEvent) {
     }
 }
 
+void* inotify_thread(void* arg) {
+    char buffer[4096];
+    const struct inotify_event* watchEvent;
+
+    while (1) {
+        int readLength = read(IeventQueue, buffer, sizeof(buffer));
+        if (readLength == -1) {
+            perror("Error reading inotify instance");
+            break;
+        }
+
+        for (char* buffPointer = buffer; buffPointer < buffer + readLength; ) {
+            watchEvent = (const struct inotify_event*)buffPointer;
+            process_event(watchEvent);
+            buffPointer += sizeof(struct inotify_event) + watchEvent->len;
+        }
+    }
+    return NULL;
+}
+
+void on_destroy(GtkWidget* widget, gpointer data) {
+    if (IeventQueue != -1) {
+        close(IeventQueue);
+    }
+    gtk_main_quit();
+}
+
 int main(int argc, char** argv) {
     char* basePath = NULL;
-    char buffer[4096];
-    int readLength;
-    const struct inotify_event* watchEvent;
-    int eventDetected = 0;
 
     const uint32_t watchMask = IN_CREATE | IN_DELETE | IN_ACCESS | IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF; // list of events
 
@@ -163,24 +187,39 @@ int main(int argc, char** argv) {
         exit(EXT_ERR_ADD_WATCH);
     }
 
-    while (1) {
-        if (!eventDetected) {
-            printf("waiting for event...\n");
-            eventDetected = 1;
-        }
+    // initialize gtk
+    gtk_init(&argc, &argv);
 
-        readLength = read(IeventQueue, buffer, sizeof(buffer)); // read event from inotify
-        if (readLength == -1) {
-            fprintf(stderr, "Error reading from inotify instance\n");
-            exit(EXT_ERR_READ_INOTIFY);
-        }
+    // create main window
+    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+    g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
-        for (char* buffPointer = buffer; buffPointer < buffer + readLength; ) {
-            watchEvent = (const struct inotify_event*)buffPointer;
-            process_event(watchEvent); // call event handle function
-            buffPointer += sizeof(struct inotify_event) + watchEvent->len; // move buffer pointer
-        }
+    // view text logging
+    GtkWidget* scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget* textView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolledWindow), textView);
+    gtk_container_add(GTK_CONTAINER(window), scrolledWindow);
+
+    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+
+    // start inotify event handling thread
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
+        perror("Error creating inotify thread");
+        return EXIT_FAILURE;
     }
+
+    // gtk main loop
+    gtk_widget_show_all(window);
+    gtk_main();
+
+    // clean up
+    pthread_cancel(thread);
+    pthread_join(thread, NULL);
+    if(logFile) fclose(logFile);
 
     return EXT_SUCCESS;
 }
