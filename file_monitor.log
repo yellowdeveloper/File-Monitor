@@ -1,2 +1,13 @@
 Event: [2024-12-04 17:31:16] File newfile.txt: created
 Event: [2024-12-04 17:31:25] File newfile.txt: deleted
+Event: [2024-12-08 22:13:16] File test: created
+Event: [2024-12-08 22:17:25] File test: accessed
+Event: [2024-12-08 22:19:06] File new.txt: created
+Event: [2024-12-08 22:19:32] File new.txt: deleted
+Event: [2024-12-08 22:19:40] File new.txt: created
+Event: [2024-12-08 22:19:45] File .new.txt.swp: created
+Event: [2024-12-09 00:09:00] File new.txt: deleted
+Event: [2024-12-09 00:09:12] File test: created
+Event: [2024-12-09 00:09:52] File test: accessed
+Event: [2024-12-09 00:10:12] File .file_monitor.log.swp: created
+Event: [2024-12-09 00:10:15] File .file_monitor.log.swp: written and closed

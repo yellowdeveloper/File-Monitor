@@ -51,6 +51,7 @@ void rotate_log_file(const char* logPath) {
     printf("Log file created/opened at: %s\n", logPath); // ����� �޽���
 }
 
+// callback func to use in g_idle_add() func
 gboolean update_log_buffer(gpointer data) {
     const char* eventMessage = (const char*)data;
 
@@ -73,6 +74,7 @@ void log_event(const char* eventMessage) {
         fflush(logFile);
     }
 
+    // duplicate string and add to main thread
     g_idle_add(update_log_buffer, g_strdup(eventMessage));
 }
 
@@ -216,7 +218,7 @@ int main(int argc, char** argv) {
 
     // get text buffer and show text at the top
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
-    if(log_buffer/) {
+    if(log_buffer) {
 	GtkTextIter start;
 	gtk_text_buffer_get_start_iter(log_buffer, &start);
 	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
