@@ -114,9 +114,6 @@ void process_event(const struct inotify_event* watchEvent) {
         else if (watchEvent->mask & IN_DELETE) {
             strcat(notificationMessage, "deleted");
         }
-        else if (watchEvent->mask & IN_DELETE_SELF) {
-            strcat(notificationMessage, "deleted");
-        }
         else if (watchEvent->mask & IN_ACCESS) {
             strcat(notificationMessage, "accessed");
         }
@@ -176,7 +173,7 @@ void on_destroy(GtkWidget* widget, gpointer data) {
 int main(int argc, char** argv) {
     char* basePath = NULL;
 
-    const uint32_t watchMask = IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_ACCESS | IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF; // list of events
+    const uint32_t watchMask = IN_CREATE | IN_DELETE | IN_ACCESS | IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF; // list of events
 
     if (argc < 2) {
         fprintf(stderr, "USAGE: file_monitor PATH\n");

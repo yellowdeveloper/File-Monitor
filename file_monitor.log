@@ -11,3 +11,26 @@ Event: [2024-12-09 00:09:12] File test: created
 Event: [2024-12-09 00:09:52] File test: accessed
 Event: [2024-12-09 00:10:12] File .file_monitor.log.swp: created
 Event: [2024-12-09 00:10:15] File .file_monitor.log.swp: written and closed
+Event: [2024-12-09 00:36:12] File .file_monitor.log.swp: written and closed
+Event: [2024-12-09 00:38:11] File new.txt: created
+Event: [2024-12-09 00:41:20] File new.txt: modified
+Event: [2024-12-09 00:41:22] File new.txt: written and closed
+Event: [2024-12-09 00:41:40] File .new.txt.swp: created
+Event: [2024-12-09 00:41:43] File .new.txt.swp: written and closed
+Event: [2024-12-09 00:42:09] File test: created
+Event: [2024-12-09 00:42:27] File test: accessed
+Event: [2024-12-09 00:42:31] File new.txt: deleted
+Event: [2024-12-09 00:42:35] File .vscode: accessed
+Event: [2024-12-09 00:42:55] File .vscode: accessed
+Event: [2024-12-09 03:06:50] File test: created
+Event: [2024-12-09 03:06:59] File test: deleted
+Event: [2024-12-09 03:07:02] File test: created
+Event: [2024-12-09 03:07:06] File test: accessed
+Event: [2024-12-09 03:07:19] File test: created
+Event: [2024-12-09 03:07:23] File new.txt: created
+Event: [2024-12-09 03:07:43] File test: accessed
+Event: [2024-12-09 03:08:14] File test: accessed
+Event: [2024-12-09 03:08:32] File test: deleted
+Event: [2024-12-09 03:09:37] File new.txt: deleted
+Event: [2024-12-09 03:13:05] File test: created
+Event: [2024-12-09 03:13:08] File test: deleted
