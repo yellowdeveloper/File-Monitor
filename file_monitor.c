@@ -13,6 +13,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <gtk/gtk.h>
+#include <glib.h>
 
 // define error code
 #define EXT_SUCCESS 0
@@ -47,22 +48,32 @@ void rotate_log_file(const char* logPath) {
         perror("Error opening log file");
         exit(EXIT_FAILURE);
     }
-    printf("Log file created/opened at: %s\n", logPath); // µð¹ö±ë ¸Þ½ÃÁö
+    printf("Log file created/opened at: %s\n", logPath); // ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Þ½ï¿½ï¿½ï¿½
 }
 
-// event logging function
-void log_event(const char* eventMessage) {
+gboolean update_log_buffer(gpointer data) {
+    const char* eventMessage = (const char*)data;
+
     if (log_buffer) {
         GtkTextIter end;
         gtk_text_buffer_get_end_iter(log_buffer, &end);
         gtk_text_buffer_insert(log_buffer, &end, eventMessage, -1);
         gtk_text_buffer_insert(log_buffer, &end, "\n", -1);
     }
-    
+
+    g_free(data);
+
+    return FALSE;
+}
+
+// event logging function
+void log_event(const char* eventMessage) {
     if (logFile) {
          fprintf(logFile, "Event: %s\n", eventMessage); 
         fflush(logFile);
     }
+
+    g_idle_add(update_log_buffer, g_strdup(eventMessage));
 }
 
 // signal handle function: clean up after program ends
@@ -196,16 +207,16 @@ int main(int argc, char** argv) {
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
-    // view text logging
+    // create text space (scroll available)
     GtkWidget* scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
     GtkWidget* textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolledWindow), textView);
     gtk_container_add(GTK_CONTAINER(window), scrolledWindow);
 
+    // get text buffer and show text at the top
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
-
-    if(log_buffer) {
+    if(log_buffer/) {
 	GtkTextIter start;
 	gtk_text_buffer_get_start_iter(log_buffer, &start);
 	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
