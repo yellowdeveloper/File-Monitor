@@ -205,6 +205,12 @@ int main(int argc, char** argv) {
 
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
 
+    if(log_buffer) {
+	GtkTextIter start;
+	gtk_text_buffer_get_start_iter(log_buffer, &start);
+	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
+    }
+
     // start inotify event handling thread
     pthread_t thread;
     if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
