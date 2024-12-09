@@ -36,6 +36,7 @@ const char* logFilePath = NULL; // log file path
 time_t lastEventTime = 0; // last event occur time
 GtkTextBuffer *log_buffer = NULL; // log text buffer
 GtkWidget* file_list = NULL; // directory to monitor
+char monitored_path[512];
 
 // recurrent function and log file size check
 void rotate_log_file(const char* logPath) {
@@ -159,6 +160,8 @@ void* inotify_thread(void* arg) {
             watchEvent = (const struct inotify_event*)buffPointer;
             process_event(watchEvent);
             buffPointer += sizeof(struct inotify_event) + watchEvent->len;
+
+	    g_idle_add((GSourceFunc)update_file_list, (gpointer)monitored_path);
         }
     }
     return NULL;
@@ -250,6 +253,9 @@ int main(int argc, char** argv) {
         fprintf(stderr, "USAGE: file_monitor PATH\n");
         exit(EXT_ERR_TOO_FEW_ARGS);
     }
+
+    strncpy(monitored_path, argv[1], sizeof(monitored_path) - 1);
+    monitored_path[sizeof(monitored_path) - 1] = '\0';
 
     // log file initialize and read config file
     logFilePath = "file_monitor.log"; // set log file path (default)
