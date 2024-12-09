@@ -145,35 +145,6 @@ void process_event(const struct inotify_event* watchEvent) {
     }
 }
 
-void* inotify_thread(void* arg) {
-    char buffer[4096];
-    const struct inotify_event* watchEvent;
-
-    while (1) {
-        int readLength = read(IeventQueue, buffer, sizeof(buffer));
-        if (readLength == -1) {
-            perror("Error reading inotify instance");
-            break;
-        }
-
-        for (char* buffPointer = buffer; buffPointer < buffer + readLength; ) {
-            watchEvent = (const struct inotify_event*)buffPointer;
-            process_event(watchEvent);
-            buffPointer += sizeof(struct inotify_event) + watchEvent->len;
-
-	    g_idle_add((GSourceFunc)update_file_list, (gpointer)monitored_path);
-        }
-    }
-    return NULL;
-}
-
-void on_destroy(GtkWidget* widget, gpointer data) {
-    if (IeventQueue != -1) {
-        close(IeventQueue);
-    }
-    gtk_main_quit();
-}
-
 void update_file_list(const char* path) {
     GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
     gtk_list_store_clear(store);
@@ -191,6 +162,35 @@ void update_file_list(const char* path) {
         }
         closedir(dir);
     }
+}
+
+void* inotify_thread(void* arg) {
+    char buffer[4096];
+    const struct inotify_event* watchEvent;
+
+    while (1) {
+        int readLength = read(IeventQueue, buffer, sizeof(buffer));
+        if (readLength == -1) {
+            perror("Error reading inotify instance");
+            break;
+        }
+
+        for (char* buffPointer = buffer; buffPointer < buffer + readLength; ) {
+            watchEvent = (const struct inotify_event*)buffPointer;
+            process_event(watchEvent);
+            buffPointer += sizeof(struct inotify_event) + watchEvent->len;
+
+	        g_idle_add((GSourceFunc)update_file_list, (gpointer)monitored_path);
+        }
+    }
+    return NULL;
+}
+
+void on_destroy(GtkWidget* widget, gpointer data) {
+    if (IeventQueue != -1) {
+        close(IeventQueue);
+    }
+    gtk_main_quit();
 }
 
 GtkWidget* create_window(const char* path) {
