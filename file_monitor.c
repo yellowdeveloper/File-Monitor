@@ -98,6 +98,28 @@ void signal_handler(int signal) {
     exit(EXIT_SUCCESS);
 }
 
+void update_file_list(const char* path) {
+    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
+
+    if (is_create) {
+        gtk_list_store_clear(store);
+    }
+
+    DIR* dir = opendir(path);
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            // exclude '.' & '..'
+            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                GtkTreeIter iter;
+                gtk_list_store_append(store, &iter);
+                gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
+            }
+        }
+        closedir(dir);
+    }
+}
+
 // event handle fucntion
 void process_event(const struct inotify_event* watchEvent) {
     if (watchEvent->len > 0) { // handle if file has a name
@@ -112,9 +134,11 @@ void process_event(const struct inotify_event* watchEvent) {
         // add message by event type
         if (watchEvent->mask & IN_CREATE) {
             strcat(notificationMessage, "created");
+            g_idle_add((GSourceFunc)update_file_list, g_strdup(monitored_path));
         }
         else if (watchEvent->mask & IN_DELETE) {
             strcat(notificationMessage, "deleted");
+            g_idle_add((GSourceFunc)update_file_list, g_strdup(monitored_path));
         }
         else if (watchEvent->mask & IN_ACCESS) {
             strcat(notificationMessage, "accessed");
@@ -145,25 +169,6 @@ void process_event(const struct inotify_event* watchEvent) {
     }
 }
 
-void update_file_list(const char* path) {
-    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
-    gtk_list_store_clear(store);
-
-    DIR* dir = opendir(path);
-    if (dir) {
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != NULL) {
-            // exclude '.' & '..'
-            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-                GtkTreeIter iter;
-                gtk_list_store_append(store, &iter);
-                gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
-            }
-        }
-        closedir(dir);
-    }
-}
-
 void* inotify_thread(void* arg) {
     char buffer[4096];
     const struct inotify_event* watchEvent;
@@ -179,8 +184,6 @@ void* inotify_thread(void* arg) {
             watchEvent = (const struct inotify_event*)buffPointer;
             process_event(watchEvent);
             buffPointer += sizeof(struct inotify_event) + watchEvent->len;
-
-	        g_idle_add((GSourceFunc)update_file_list, (gpointer)monitored_path);
         }
     }
     return NULL;
