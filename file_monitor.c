@@ -100,10 +100,7 @@ void signal_handler(int signal) {
 
 void update_file_list(const char* path) {
     GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
-
-    if (is_create) {
-        gtk_list_store_clear(store);
-    }
+    gtk_list_store_clear(store);
 
     DIR* dir = opendir(path);
     if (dir) {
