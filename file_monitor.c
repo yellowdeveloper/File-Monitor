@@ -170,6 +170,58 @@ void on_destroy(GtkWidget* widget, gpointer data) {
     gtk_main_quit();
 }
 
+GtkWidget* create_main(const char* path) {
+    // create main window
+    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+
+    // divide window
+    GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+
+    // create text space (scroll available) : left
+    GtkWidget* scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget* textView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolledWindow), textView);
+    gtk_container_add(GTK_CONTAINER(window), scrolledWindow);
+
+    // get text buffer and show text at the top
+    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+    if(log_buffer) {
+	GtkTextIter start;
+	gtk_text_buffer_get_start_iter(log_buffer, &start);
+	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
+    }
+
+    // dir files : right
+    GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
+    file_list = gtk_tree_view_new();
+
+    // set dir model
+    GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
+    gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
+
+    // add colum (file name)
+    GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
+    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
+    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
+
+    // add to Paned
+    gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
+    gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
+
+    // add to window Paned
+    gtk_container_add(GTK_CONTAINER(window), paned);
+
+    // initialize file list
+    update_file_list(dir_path);
+
+    return window;
+
+}
+
 int main(int argc, char** argv) {
     char* basePath = NULL;
 
@@ -203,26 +255,8 @@ int main(int argc, char** argv) {
     // initialize gtk
     gtk_init(&argc, &argv);
 
-    // create main window
-    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
-    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+    GtkWidget* main_window = create_main(argv[1]);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
-
-    // create text space (scroll available)
-    GtkWidget* scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
-    GtkWidget* textView = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
-    gtk_container_add(GTK_CONTAINER(scrolledWindow), textView);
-    gtk_container_add(GTK_CONTAINER(window), scrolledWindow);
-
-    // get text buffer and show text at the top
-    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
-    if(log_buffer) {
-	GtkTextIter start;
-	gtk_text_buffer_get_start_iter(log_buffer, &start);
-	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
-    }
 
     // start inotify event handling thread
     pthread_t thread;
