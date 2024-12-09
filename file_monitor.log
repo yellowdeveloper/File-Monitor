@@ -34,3 +34,14 @@ Event: [2024-12-09 03:08:32] File test: deleted
 Event: [2024-12-09 03:09:37] File new.txt: deleted
 Event: [2024-12-09 03:13:05] File test: created
 Event: [2024-12-09 03:13:08] File test: deleted
+Event: [2024-12-09 19:21:34] File test: created
+Event: [2024-12-09 19:21:37] File test: deleted
+Event: [2024-12-09 19:21:49] File new.txt: created
+Event: [2024-12-09 19:21:57] File new.txt: modified
+Event: [2024-12-09 19:22:00] File new.txt: modified
+Event: [2024-12-09 19:22:01] File new.txt: modified
+Event: [2024-12-09 19:22:12] File new.txt: deleted
+Event: [2024-12-09 19:23:55] File test: created
+Event: [2024-12-09 19:24:10] File new.txt: created
+Event: [2024-12-09 19:35:20] File test: deleted
+Event: [2024-12-09 19:36:00] File new.txt: deleted

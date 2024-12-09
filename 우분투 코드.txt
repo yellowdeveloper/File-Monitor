@@ -1,8 +1,0 @@
-1. 경로 설정
-cd /root/file_monitor
-
-2. 실행 파일 생성
-gcc -o file_monitor file_monitor.c $(pkg-config --cflags --libs libnotify glib-2.0) -lconfig
-
-3. 프로그램 실행
-./file_monitor /root/file_monitor
