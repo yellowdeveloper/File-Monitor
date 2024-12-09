@@ -35,6 +35,7 @@ const char* emailRecipient = NULL; // email receiver
 const char* logFilePath = NULL; // log file path
 time_t lastEventTime = 0; // last event occur time
 GtkTextBuffer *log_buffer = NULL; // log text buffer
+GtkWidget* file_list = NULL; // directory to monitor
 
 // recurrent function and log file size check
 void rotate_log_file(const char* logPath) {
@@ -170,7 +171,9 @@ void on_destroy(GtkWidget* widget, gpointer data) {
     gtk_main_quit();
 }
 
-GtkWidget* create_main(const char* path) {
+update_file_list
+
+GtkWidget* create_window(const char* path) {
     // create main window
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
@@ -180,7 +183,7 @@ GtkWidget* create_main(const char* path) {
     GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 
     // create text space (scroll available) : left
-    GtkWidget* scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
     GtkWidget* textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolledWindow), textView);
@@ -216,7 +219,7 @@ GtkWidget* create_main(const char* path) {
     gtk_container_add(GTK_CONTAINER(window), paned);
 
     // initialize file list
-    update_file_list(dir_path);
+    update_file_list(path);
 
     return window;
 
@@ -255,7 +258,7 @@ int main(int argc, char** argv) {
     // initialize gtk
     gtk_init(&argc, &argv);
 
-    GtkWidget* main_window = create_main(argv[1]);
+    GtkWidget* window = create_window(argv[1]);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
     // start inotify event handling thread
