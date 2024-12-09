@@ -204,7 +204,7 @@ GtkWidget* create_window(const char* path) {
     GtkWidget* textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
-    gtk_container_add(GTK_CONTAINER(window), scrolledWindow);
+    gtk_container_add(GTK_CONTAINER(window), scrolled_log);
 
     // get text buffer and show text at the top
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
