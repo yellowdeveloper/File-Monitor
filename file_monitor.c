@@ -171,7 +171,24 @@ void on_destroy(GtkWidget* widget, gpointer data) {
     gtk_main_quit();
 }
 
-update_file_list
+void update_file_list(const char* path) {
+    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
+    gtk_list_store_clear(store);
+
+    DIR* dir = opendir(path);
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            // exclude '.' & '..'
+            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                GtkTreeIter iter;
+                gtk_list_store_append(store, &iter);
+                gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
+            }
+        }
+        closedir(dir);
+    }
+}
 
 GtkWidget* create_window(const char* path) {
     // create main window
