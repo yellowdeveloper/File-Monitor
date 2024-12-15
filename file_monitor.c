@@ -32,7 +32,7 @@ FILE* logFile = NULL; // log file pointer
 char filteredExtension[64] = "";   // file extension to filter
 // int emailEnabled = 0; // email notificaton activate status
 // const char* emailRecipient = NULL; // email receiver
-char logFilePath[512]; // log file path
+const char* logFilePath = NULL; // log file path
 time_t lastEventTime = 0; // last event occur time
 
 GtkTextBuffer *log_buffer = NULL; // log text buffer
@@ -244,8 +244,8 @@ GtkWidget* create_window(const char* path) {
     gtk_box_pack_start(GTK_BOX(vbox), button, FALSE, FALSE, 5);
 
     // create text space (scroll available) : left
-    GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
-    GtkWidget* textView = gtk_text_view_new();
+    scrolled_log = gtk_scrolled_window_new(NULL, NULL);
+    textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
 
