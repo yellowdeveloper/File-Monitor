@@ -14,387 +14,340 @@
 #include <dirent.h>
 #include <gtk/gtk.h>
 #include <glib.h>
-#include <omp.h>
 
-#define EXT_SUCCESS 0
-#define EXT_ERR_TOO_FEW_ARGS 1
-#define EXT_ERR_INIT_INOTIFY 2
-#define EXT_ERR_ADD_WATCH 3
-#define EXT_ERR_READ_INOTIFY 5
-#define EXT_ERR_CONFIG_FILE 6
+#define EXT_SUCCESS 0                // 성공 코드
+#define EXT_ERR_TOO_FEW_ARGS 1       // 인자 부족 오류 코드
+#define EXT_ERR_INIT_INOTIFY 2       // inotify 초기화 실패 오류 코드
+#define EXT_ERR_ADD_WATCH 3          // 디렉토리 감시 추가 실패 오류 코드
+#define EXT_ERR_READ_INOTIFY 5       // inotify 이벤트 읽기 오류 코드
+#define EXT_ERR_CONFIG_FILE 6        // 설정 파일 읽기 오류 코드
 
-int IeventStatus = -1;
-int IeventQueue = -1;
-char* ProgramTitle = "file_monitor";
-FILE* logFile = NULL;
-GtkTextBuffer *log_buffer = NULL;
-GtkWidget* file_list = NULL;
-char** monitoredDirs = NULL;
-int monitoredDirCount = 0;
-char logFilePath[512] = "";
+// 전역 변수들
+int IeventQueue = -1;                // inotify 대기 큐 (이벤트를 기다리는 큐)
+char* ProgramTitle = "file_monitor"; // 프로그램 제목
+time_t lastEventTime = 0;            // 마지막 이벤트 발생 시간
+FILE* logFile = NULL;                // 로그 파일 포인터
+char logFilePath[512];               // 로그 파일 경로 (설정에서 읽음)
+char filteredExtension[64] = "";     // 필터링할 확장자 (설정에서 읽음)
 
-volatile bool keep_running = true;
-volatile bool logBufferDirty = false;
+GtkWidget *logWindow;    // 로그 출력용 창
+GtkWidget *logTextView;  // 로그 출력용 텍스트 뷰
+GtkTextBuffer *logBuffer; // 텍스트 버퍼
 
-char* dynamicLogBuffer = NULL;
-size_t dynamicLogBufferSize = 0;
-size_t dynamicLogBufferCapacity = 8192;
+// 디렉토리와 watch descriptor (wd)의 매핑 테이블
+typedef struct {
+    int wd;                           // watch descriptor
+    char path[512];                   // 디렉토리 경로
+} WatchDescriptor;
 
-static gboolean on_directory_pane_toggle(GtkWidget* widget, GdkEventButton* event, gpointer user_data) {
-    static gboolean expanded = TRUE;
+WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
+int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
 
-    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) {
-        if (expanded) {
-            gtk_widget_hide(scrolled_files); // Hide file list
-        } else {
-            gtk_widget_show(scrolled_files); // Show file list
-        }
-        expanded = !expanded;
-    }
-    return TRUE;
-}
-
-bool is_child_of_monitored_dir(const char* path) {
-    for (int i = 0; i < monitoredDirCount; ++i) {
-        size_t len = strlen(monitoredDirs[i]);
-        if (strncmp(monitoredDirs[i], path, len) == 0 && path[len] == '/') {
-            return true;
-        }
-    }
-    return false;
-}
-
+// 로그 파일 초기화 함수
 void init_log_file(const char* path) {
-    logFile = fopen(path, "a");
+    logFile = fopen(path, "a"); // 로그 파일 열기 (추가 모드)
     if (!logFile) {
-        perror("Error opening log file");
-        exit(EXIT_FAILURE);
+        perror("Error opening log file"); // 파일 열기 실패 시 오류 메시지 출력
+        exit(EXIT_FAILURE); // 프로그램 종료
     }
-    printf("Log file initialized at: %s\n", path);
-
-    dynamicLogBuffer = malloc(dynamicLogBufferCapacity);
-    if (!dynamicLogBuffer) {
-        perror("Failed to allocate log buffer");
-        exit(EXIT_FAILURE);
-    }
-    dynamicLogBuffer[0] = '\0';
+    printf("Log file initialized at: %s\n", path); // 로그 파일 초기화 완료 메시지 출력
 }
 
-gboolean update_log_buffer(gpointer data) {
-    const char* eventMessage = (const char*)data;
+void init_log_ui() {
+    gtk_init(NULL, NULL);
 
-    if (log_buffer) {
-        GtkTextIter end;
-        gtk_text_buffer_get_end_iter(log_buffer, &end);
-        gtk_text_buffer_insert(log_buffer, &end, eventMessage, -1);
-        gtk_text_buffer_insert(log_buffer, &end, "\n", -1);
-    }
+    // 메인 윈도우 생성
+    logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
+    gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
 
-    g_free(data);
-    return FALSE;
+    // 텍스트 뷰 생성
+    logTextView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE); // 읽기 전용
+    logBuffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
+
+    // 스크롤 가능한 창에 텍스트 뷰 추가
+    GtkWidget *scrollWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scrollWindow), logTextView);
+    gtk_container_add(GTK_CONTAINER(logWindow), scrollWindow);
+
+    // 창 닫기 이벤트 처리
+    g_signal_connect(logWindow, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    gtk_widget_show_all(logWindow); // 모든 위젯 표시
 }
 
+// 로그 이벤트 함수
 void log_event(const char* eventMessage) {
-    size_t messageLength = strlen(eventMessage) + 1; // Include newline
+    GtkTextIter endIter;
 
-    if (dynamicLogBufferSize + messageLength > dynamicLogBufferCapacity - 1) {
-        dynamicLogBufferCapacity *= 2;
-        dynamicLogBuffer = realloc(dynamicLogBuffer, dynamicLogBufferCapacity);
-        if (!dynamicLogBuffer) {
-            perror("Failed to reallocate log buffer");
-            exit(EXIT_FAILURE);
-        }
-    }
+    // 텍스트 버퍼의 끝에 메시지 추가
+    gtk_text_buffer_get_end_iter(logBuffer, &endIter);
+    gtk_text_buffer_insert(logBuffer, &endIter, eventMessage, -1);
+    gtk_text_buffer_insert(logBuffer, &endIter, "\n", -1);
 
-    strcat(dynamicLogBuffer, eventMessage);
-    strcat(dynamicLogBuffer, "\n");
-    dynamicLogBufferSize += messageLength;
-
-    logBufferDirty = true;
-    g_idle_add(update_log_buffer, g_strdup(eventMessage));
+    // 콘솔에도 출력 (디버깅 용도)
+    printf("%s\n", eventMessage);
 }
 
-void flush_log_buffer() {
-    if (logFile && logBufferDirty) {
-        fprintf(logFile, "%s", dynamicLogBuffer);
-        fflush(logFile);
-        dynamicLogBuffer[0] = '\0';
-        dynamicLogBufferSize = 0;
-        logBufferDirty = false;
-    }
-}
+// 설정 파일에서 디렉토리 및 로그 파일 경로 읽기
+void read_config(const char* configPath, char monitoredDirs[][512], int* dirCount) {
+    config_t cfg; // libconfig 설정 객체
+    config_init(&cfg); // 설정 객체 초기화
 
-void read_config(const char* configPath) {
-    config_t cfg;
-    config_init(&cfg);
-
-    if (!config_read_file(&cfg, configPath)) {
+    if (!config_read_file(&cfg, configPath)) {  // 설정 파일 읽기
         fprintf(stderr, "Error reading config file %s: %s\n", configPath, config_error_text(&cfg));
-        config_destroy(&cfg);
-        exit(EXT_ERR_CONFIG_FILE);
+        config_destroy(&cfg);  // 설정 객체 해제
+        exit(EXT_ERR_CONFIG_FILE); // 설정 파일 오류 시 종료
     }
 
     const char* logPath = NULL;
-    if (config_lookup_string(&cfg, "log_file", &logPath)) {
-        strncpy(logFilePath, logPath, sizeof(logFilePath));
-    } else {
+    if (config_lookup_string(&cfg, "log_file", &logPath)) { // 설정 파일에서 'log_file' 항목 읽기
+        strncpy(logFilePath, logPath, sizeof(logFilePath));  // 로그 파일 경로 저장
+    }
+    else {
         fprintf(stderr, "Missing 'log_file' in config file\n");
-        config_destroy(&cfg);
-        exit(EXT_ERR_CONFIG_FILE);
+        config_destroy(&cfg); // 설정 객체 해제
+        exit(EXT_ERR_CONFIG_FILE); // 로그 파일 경로가 없으면 종료
     }
 
-    config_setting_t* directories = config_lookup(&cfg, "monitor_directories");
-    if (directories && config_setting_is_array(directories)) {
-        monitoredDirCount = config_setting_length(directories);
-        monitoredDirs = malloc(monitoredDirCount * sizeof(char*));
-        for (int i = 0; i < monitoredDirCount; ++i) {
-            const char* dir = config_setting_get_string_elem(directories, i);
-            monitoredDirs[i] = strdup(dir);
+    const char* filterExt = NULL;
+    if (config_lookup_string(&cfg, "filtered_extension", &filterExt)) { // 필터링할 확장자 읽기
+        strncpy(filteredExtension, filterExt, sizeof(filteredExtension)); // 필터링 확장자 저장
+    }
+
+    config_setting_t* directories = config_lookup(&cfg, "monitor_directories"); // 디렉토리 목록 읽기
+    if (directories) {
+        if (config_setting_is_array(directories)) { // 'monitor_directories'가 배열인지 확인
+            int count = config_setting_length(directories); // 배열의 길이 (디렉토리 개수)
+            for (int i = 0; i < count && i < 512; ++i) { // 디렉토리 경로를 배열에 저장
+                const char* dir = config_setting_get_string_elem(directories, i);
+                strncpy(monitoredDirs[i], dir, 512); // 디렉토리 경로 저장
+            }
+            *dirCount = count; // 디렉토리 개수 설정
         }
-    } else {
-        fprintf(stderr, "Missing or invalid 'monitor_directories' in config file\n");
-        config_destroy(&cfg);
-        exit(EXT_ERR_CONFIG_FILE);
+        else {
+            fprintf(stderr, "'monitor_directories' must be an array in config file\n");
+            config_destroy(&cfg); // 설정 객체 해제
+            exit(EXT_ERR_CONFIG_FILE); // 배열이 아니면 종료
+        }
+    }
+    else {
+        fprintf(stderr, "Missing 'monitor_directories' in config file\n");
+        config_destroy(&cfg); // 설정 객체 해제
+        exit(EXT_ERR_CONFIG_FILE); // 디렉토리가 없으면 종료
     }
 
-    config_destroy(&cfg);
+    config_destroy(&cfg); // 설정 객체 해제
 }
 
-void update_file_list(const char* path) {
-    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
-    gtk_list_store_clear(store);
-
-    // Add '..' only if the directory is a child of a monitored directory
-    if (is_child_of_monitored_dir(path)) {
-        GtkTreeIter iter;
-        gtk_list_store_append(store, &iter);
-        gtk_list_store_set(store, &iter, 0, "..", -1);
-    }
-
-    DIR* dir = opendir(path);
-    if (dir) {
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != NULL) {
-            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-                GtkTreeIter iter;
-                gtk_list_store_append(store, &iter);
-                gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
-            }
-        }
-        closedir(dir);
-    }
-}
-
-void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColumn* column, gpointer user_data) {
-    GtkTreeModel* model = gtk_tree_view_get_model(tree_view);
-    GtkTreeIter iter;
-
-    if (gtk_tree_model_get_iter(model, &iter, path)) {
-        gchar* selected_dir = NULL;
-        gtk_tree_model_get(model, &iter, 0, &selected_dir, -1);
-
-        if (selected_dir) {
-            char new_path[512];
-            if (strcmp(selected_dir, "..") == 0 && is_child_of_monitored_dir((char*)user_data)) {
-                // Navigate to the parent directory
-                strncpy(new_path, (char*)user_data, sizeof(new_path));
-                char* last_slash = strrchr(new_path, '/');
-                if (last_slash) {
-                    *last_slash = '\0';
-                } else {
-                    snprintf(new_path, sizeof(new_path), "/"); // Root directory fallback
-                }
-            } else {
-                snprintf(new_path, sizeof(new_path), "%s/%s", (char*)user_data, selected_dir);
-            }
-
-            struct stat path_stat;
-            if (stat(new_path, &path_stat) == 0 && S_ISDIR(path_stat.st_mode)) {
-                update_file_list(new_path);
-                strncpy((char*)user_data, new_path, 512); // Update the current path
-            }
-
-            g_free(selected_dir);
-        }
-    }
-}
-
-void* inotify_thread(void* arg) {
-    size_t bufferSize = 4096;
-    char* buffer = malloc(bufferSize);
-    if (!buffer) {
-        perror("Failed to allocate buffer");
-        return NULL;
-    }
-
-    while (keep_running) {
-        int length = read(IeventQueue, buffer, bufferSize);
-        if (length < 0) {
-            perror("Error reading inotify events");
-            break;
-        }
-
-        if (length == bufferSize) {
-            bufferSize *= 2;
-            buffer = realloc(buffer, bufferSize);
-            if (!buffer) {
-                perror("Failed to reallocate buffer");
-                break;
-            }
-        }
-
-        for (int i = 0; i < length;) {
-            struct inotify_event* event = (struct inotify_event*)&buffer[i];
-            if (event->len > 0) {
-                char message[512];
-                snprintf(message, sizeof(message), "Event: %s on %s", 
-                         (event->mask & IN_CREATE) ? "Created" : 
-                         (event->mask & IN_DELETE) ? "Deleted" : "Modified",
-                         event->name);
-                log_event(message);
-            }
-            i += sizeof(struct inotify_event) + event->len;
-        }
-    }
-
-    free(buffer);
-    return NULL;
-}
-
+// 디렉토리 감시 추가 함수 (하위 디렉토리도 포함)
 void add_watch_recursive(const char* path) {
-    DIR* dir = opendir(path);
+    DIR* dir = opendir(path);  // 디렉토리 열기
     if (!dir) {
         perror("Error opening directory");
-        return;
+        return;  // 디렉토리 열기 실패 시 리턴
     }
 
     struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = readdir(dir)) != NULL) { // 디렉토리 엔트리 읽기
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
+            continue;  // '.'과 '..'은 무시
         }
 
         char subPath[512];
-        snprintf(subPath, sizeof(subPath), "%s/%s", path, entry->d_name);
+        snprintf(subPath, sizeof(subPath), "%s/%s", path, entry->d_name); // 하위 디렉토리 경로 생성
 
         struct stat pathStat;
-        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) {
-            add_watch_recursive(subPath);
+        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) { // 디렉토리인지 확인
+            add_watch_recursive(subPath); // 하위 디렉토리 재귀적으로 감시 추가
         }
     }
 
-    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY);
+    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE_SELF); // inotify로 감시 추가
     if (wd == -1) {
-        fprintf(stderr, "Error adding watch for %s\n", path);
-    } else {
-        printf("Watching: %s\n", path);
+        fprintf(stderr, "Error adding watch for %s\n", path); // 감시 추가 실패 시 오류 메시지 출력
+    }
+    else {
+        // watch descriptor와 디렉토리 매핑 저장
+        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512); // 디렉토리 경로 저장
+        watchDescriptors[watchDescriptorCount].wd = wd; // watch descriptor 저장
+        watchDescriptorCount++; // watch descriptor 개수 증가
+
+        printf("Watching: %s\n", path); // 감시 시작 디렉토리 출력
     }
 
-    closedir(dir);
+    closedir(dir); // 디렉토리 닫기
 }
 
-GtkWidget* create_window(const char* root_path) {
+// watch descriptor를 경로로 변환하는 함수
+const char* get_path_from_wd(int wd) {
+    for (int i = 0; i < watchDescriptorCount; ++i) {
+        if (watchDescriptors[i].wd == wd) { // watch descriptor가 일치하면 경로 반환
+            return watchDescriptors[i].path;
+        }
+    }
+    return "Unknown path"; // 경로를 찾지 못한 경우
+}
+
+// 파일 확장자 필터링 함수
+int has_filtered_extension(const char* filename) {
+    if (strlen(filteredExtension) == 0) return 0;  // 필터링할 확장자가 없으면 모두 허용
+
+    const char* ext = strrchr(filename, '.');  // 파일 확장자 찾기
+    if (ext != NULL && strcmp(ext + 1, filteredExtension) == 0) {
+        return 1;  // 필터링 확장자와 일치하면 1 반환
+    }
+
+    return 0;  // 확장자가 일치하지 않으면 0 반환
+}
+
+// 필터링 확장자 확인 함수 (한 번만 출력)
+void check_filtered_extension() {
+    if (strlen(filteredExtension) > 0) {
+        printf("Filtering files with extension: .%s\n", filteredExtension); // 필터링 확장자 출력
+    }
+    else {
+        printf("No extensions are filtered\n"); // 필터링 확장자가 없으면 출력
+    }
+}
+
+// 이벤트 처리 함수
+void process_event(const struct inotify_event* watchEvent) {
+    if (watchEvent->len > 0) {
+        const char* filename = watchEvent->name;
+
+        // 필터링된 확장자일 경우 처리하지 않음
+        if (has_filtered_extension(filename)) {
+            return; // 필터링된 파일은 이벤트를 처리하지 않음
+        }
+
+        char notificationMessage[1024]; // 이벤트 메시지 저장
+        char fullPath[512]; // 파일의 전체 경로 저장
+        char eventTime[64]; // 이벤트 발생 시간 저장
+        time_t currentTime = time(NULL); // 현재 시간 얻기
+
+        // 발생 시간 포맷팅
+        strftime(eventTime, sizeof(eventTime), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+
+        const char* basePath = get_path_from_wd(watchEvent->wd); // watch descriptor에 해당하는 경로 얻기
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", basePath, watchEvent->name); // 전체 경로 생성
+        snprintf(notificationMessage, sizeof(notificationMessage), "[%s] File %s: ", eventTime, fullPath);
+
+        // 이벤트 종류에 따라 메시지 작성
+        if (watchEvent->mask & IN_CREATE) {
+            strcat(notificationMessage, "created");
+        }
+        else if (watchEvent->mask & IN_DELETE) {
+            strcat(notificationMessage, "deleted");
+        }
+        else if (watchEvent->mask & IN_MODIFY) {
+            strcat(notificationMessage, "modified");
+        }
+        else if (watchEvent->mask & IN_MOVE_SELF) {
+            strcat(notificationMessage, "moved");
+        }
+
+        // 마지막 이벤트가 1초 이상 간격을 두고 발생한 경우 로그 기록
+        if (difftime(currentTime, lastEventTime) >= 1) {
+            lastEventTime = currentTime; // 마지막 이벤트 시간 갱신
+            log_event(notificationMessage); // 로그에 이벤트 기록
+        }
+    }
+}
+
+GtkWidget* create_window(const char* path) {
+    // create main window
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
-    GtkWidget* outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    // divide window
+    GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+
+    // create text space (scroll available) : left
     GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
     GtkWidget* textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
+
+    // get text buffer and show text at the top
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+    if(log_buffer) {
+	GtkTextIter start;
+	gtk_text_buffer_get_start_iter(log_buffer, &start);
+	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
+    }
 
-    GtkWidget* right_pane = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-
-    // Create directory title bar
-    GtkWidget* directory_titlebar = gtk_event_box_new();
-    GtkWidget* directory_label = gtk_label_new("Directories");
-    gtk_container_add(GTK_CONTAINER(directory_titlebar), directory_label);
-    g_signal_connect(directory_titlebar, "button-press-event", G_CALLBACK(on_directory_pane_toggle), NULL);
-
-    // Create file list container
-    scrolled_files = gtk_scrolled_window_new(NULL, NULL);
+    // dir files : right
+    GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
     file_list = gtk_tree_view_new();
+
+    // set dir model
     GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
+
+    // add colum (file name)
     GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
     GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
     gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
 
-    // Pack into right pane
-    gtk_box_pack_start(GTK_BOX(right_pane), directory_titlebar, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(right_pane), scrolled_files, TRUE, TRUE, 0);
+    // add to Paned
+    gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
+    gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
 
-    gtk_paned_pack1(GTK_PANED(outer_paned), scrolled_log, TRUE, FALSE);
-    gtk_paned_pack2(GTK_PANED(outer_paned), right_pane, TRUE, FALSE);
+    // add to window Paned
+    gtk_container_add(GTK_CONTAINER(window), paned);
 
-    gtk_container_add(GTK_CONTAINER(window), outer_paned);
+    // initialize file list
+    update_file_list(path);
 
-    update_file_list(root_path);
     return window;
-}
 
-void signal_handler(int signum) {
-    keep_running = false;
-    gtk_main_quit();
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
+    if (argc < 2) { // 인자가 부족한 경우
         fprintf(stderr, "USAGE: file_monitor CONFIG_PATH\n");
-        exit(EXT_ERR_TOO_FEW_ARGS);
+        exit(EXT_ERR_TOO_FEW_ARGS); // 종료
     }
 
-    read_config(argv[1]);
-    init_log_file(logFilePath);
+    char monitoredDirs[512][512];  // 모니터링할 디렉토리 배열
+    int dirCount = 0; // 모니터링할 디렉토리 개수
 
-    IeventQueue = inotify_init();
+    read_config(argv[1], monitoredDirs, &dirCount); // 설정 파일 읽기
+    init_log_file(logFilePath); // 로그 파일 초기화
+    init_log_ui();
+
+    check_filtered_extension();  // 필터링 확장자 확인 (한 번만 출력)
+
+    IeventQueue = inotify_init();  // inotify 인스턴스 초기화
     if (IeventQueue == -1) {
         fprintf(stderr, "Error initializing inotify instance\n");
-        exit(EXT_ERR_INIT_INOTIFY);
+        exit(EXT_ERR_INIT_INOTIFY); // 초기화 실패 시 종료
     }
 
-    #pragma omp parallel for
-    for (int i = 0; i < monitoredDirCount; ++i) {
-        add_watch_recursive(monitoredDirs[i]);
+    for (int i = 0; i < dirCount; ++i) {
+        add_watch_recursive(monitoredDirs[i]); // 디렉토리 감시 추가
     }
 
-    gtk_init(&argc, &argv);
-
-    GtkWidget* window = create_window(monitoredDirs[0]);
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
-
-    signal(SIGINT, signal_handler);
-
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
-        perror("Error creating inotify thread");
-        flush_log_buffer();
-        for (int i = 0; i < monitoredDirCount; ++i) {
-            free(monitoredDirs[i]);
+    char buffer[4096]; // 이벤트를 받을 버퍼
+    while (1) {
+        int readLength = read(IeventQueue, buffer, sizeof(buffer)); // inotify 이벤트 읽기
+        if (readLength == -1) {
+            fprintf(stderr, "Error reading from inotify instance\n");
+            exit(EXT_ERR_READ_INOTIFY); // 이벤트 읽기 실패 시 종료
         }
-        free(monitoredDirs);
-        free(dynamicLogBuffer);
-        fclose(logFile);
-        exit(EXIT_FAILURE);
+
+        for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
+            const struct inotify_event* watchEvent = (const struct inotify_event*)buffPointer; // 이벤트 처리
+            process_event(watchEvent);
+            buffPointer += sizeof(struct inotify_event) + watchEvent->len; // 버퍼 이동
+        }
     }
 
-    gtk_widget_show_all(window);
     gtk_main();
 
-    keep_running = false;
-    pthread_join(thread, NULL);
-
-    flush_log_buffer();
-
-    for (int i = 0; i < monitoredDirCount; ++i) {
-        free(monitoredDirs[i]);
-    }
-    free(monitoredDirs);
-    free(dynamicLogBuffer);
-
-    if (logFile) fclose(logFile);
-    return EXT_SUCCESS;
+    return EXT_SUCCESS; // 정상 종료
 }
