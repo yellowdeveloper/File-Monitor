@@ -267,8 +267,10 @@ void add_watch_recursive(const char* path) {
 }
 
 GtkWidget* create_window(const char* root_path) {
+    char window_title[512];
+    snprintf(window_title, sizeof(window_title), "File Monitor - %s", root_path);
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+    gtk_window_set_title(GTK_WINDOW(window), window_title);
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
     GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
