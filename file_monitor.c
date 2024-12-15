@@ -7,7 +7,7 @@
 #include <signal.h>
 #include <sys/inotify.h>
 #include <libnotify/notify.h>
-#include <pthread.h>
+#include <pthread.h>  
 #include <libconfig.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -29,6 +29,10 @@ time_t lastEventTime = 0;            // 마지막 이벤트 발생 시간
 FILE* logFile = NULL;                // 로그 파일 포인터
 char logFilePath[512];               // 로그 파일 경로 (설정에서 읽음)
 char filteredExtension[64] = "";     // 필터링할 확장자 (설정에서 읽음)
+
+GtkTextBuffer *log_buffer = NULL; // log text buffer
+GtkWidget* file_list = NULL; // directory to monitor
+char monitored_path[512];
 
 // 디렉토리와 watch descriptor (wd)의 매핑 테이블
 typedef struct {
@@ -55,7 +59,34 @@ void log_event(const char* eventMessage) {
         fprintf(logFile, "%s\n", eventMessage); // 로그 파일에 메시지 기록
         fflush(logFile);                        // 버퍼 플러시
     }
+
+        // Update log buffer in GUI
+    if (log_buffer) {
+        GtkTextIter end;
+        gtk_text_buffer_get_end_iter(log_buffer, &end);
+        gtk_text_buffer_insert(log_buffer, &end, eventMessage, -1);
+        gtk_text_buffer_insert(log_buffer, &end, "\n", -1);
+    }
+
     printf("%s\n", eventMessage); // 콘솔에도 출력
+}
+
+void update_file_list(const char* path) {
+    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
+    gtk_list_store_clear(store);
+
+    DIR* dir = opendir(path);
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                GtkTreeIter iter;
+                gtk_list_store_append(store, &iter);
+                gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
+            }
+        }
+        closedir(dir);
+    }
 }
 
 // 설정 파일에서 디렉토리 및 로그 파일 경로 읽기
@@ -224,6 +255,75 @@ void process_event(const struct inotify_event* watchEvent) {
     }
 }
 
+void* inotify_thread(void* arg) {
+    char buffer[4096];
+    while (1) {
+        int length = read(IeventQueue, buffer, sizeof(buffer));
+        if (length == -1) {
+            perror("Error reading inotify instance");
+            break;
+        }
+
+        for (char* ptr = buffer; ptr < buffer + length; ) {
+            const struct inotify_event* event = (const struct inotify_event*)ptr;
+            process_event(event);
+            ptr += sizeof(struct inotify_event) + event->len;
+        }
+    }
+    return NULL;
+}
+
+GtkWidget* create_window(const char* path) {
+    // create main window
+    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+
+    // divide window
+    GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+
+    // create text space (scroll available) : left
+    GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget* textView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
+
+    // get text buffer and show text at the top
+    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+    if(log_buffer) {
+	GtkTextIter start;
+	gtk_text_buffer_get_start_iter(log_buffer, &start);
+	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
+    }
+
+    // dir files : right
+    GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
+    file_list = gtk_tree_view_new();
+
+    // set dir model
+    GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
+    gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
+
+    // add colum (file name)
+    GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
+    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
+    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
+
+    // add to Paned
+    gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
+    gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
+
+    // add to window Paned
+    gtk_container_add(GTK_CONTAINER(window), paned);
+
+    // initialize file list
+    update_file_list(path);
+
+    return window;
+
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) { // 인자가 부족한 경우
         fprintf(stderr, "USAGE: file_monitor CONFIG_PATH\n");
@@ -248,20 +348,28 @@ int main(int argc, char** argv) {
         add_watch_recursive(monitoredDirs[i]); // 디렉토리 감시 추가
     }
 
-    char buffer[4096]; // 이벤트를 받을 버퍼
-    while (1) {
-        int readLength = read(IeventQueue, buffer, sizeof(buffer)); // inotify 이벤트 읽기
-        if (readLength == -1) {
-            fprintf(stderr, "Error reading from inotify instance\n");
-            exit(EXT_ERR_READ_INOTIFY); // 이벤트 읽기 실패 시 종료
-        }
+    gtk_init(&argc, &argv);
 
-        for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
-            const struct inotify_event* watchEvent = (const struct inotify_event*)buffPointer; // 이벤트 처리
-            process_event(watchEvent);
-            buffPointer += sizeof(struct inotify_event) + watchEvent->len; // 버퍼 이동
-        }
+    GtkWidget* window = create_window(argv[1]);
+    g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
+
+    // start inotify event handling thread
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
+        perror("Error creating inotify thread");
+        return EXIT_FAILURE;
     }
+
+    // gtk main loop
+    gtk_widget_show_all(window);
+    gtk_main();
+
+    // clean up
+    pthread_cancel(thread);
+    pthread_join(thread, NULL);
+    if(logFile) fclose(logFile);
+
+    return EXT_SUCCESS;
 
     return EXT_SUCCESS; // 정상 종료
 }
