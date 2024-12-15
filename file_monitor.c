@@ -47,6 +47,21 @@ typedef struct {
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
 int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
 
+void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
+        const char *clickedPath = (const char *)data;
+
+        // 클릭된 디렉토리의 절대 경로를 생성
+        char absolutePath[PATH_MAX];
+        realpath(clickedPath, absolutePath);
+
+        printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
+
+        // 디렉토리 내용을 표시
+        show_directory_contents(absolutePath);
+    }
+}
+
 void show_directory_contents(const char *directory) {
     // 기존 내용 삭제
     GList *children = gtk_container_get_children(GTK_CONTAINER(directoryContentsBox));
@@ -89,21 +104,6 @@ void show_directory_contents(const char *directory) {
     }
 
     closedir(dir);
-}
-
-void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
-        const char *clickedPath = (const char *)data;
-
-        // 클릭된 디렉토리의 절대 경로를 생성
-        char absolutePath[PATH_MAX];
-        realpath(clickedPath, absolutePath);
-
-        printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
-
-        // 디렉토리 내용을 표시
-        show_directory_contents(absolutePath);
-    }
 }
 
 // 디렉토리 목록에 아이템 추가
