@@ -245,7 +245,7 @@ GtkWidget* create_window(const char* path) {
 
     // create text space (scroll available) : left
     scrolled_log = gtk_scrolled_window_new(NULL, NULL);
-    textView = gtk_text_view_new();
+    text_view = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
 
