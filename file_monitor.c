@@ -140,12 +140,16 @@ void update_file_list(const char* path) {
     GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
     gtk_list_store_clear(store);
 
+    // Add '..' for navigating to the parent directory
+    GtkTreeIter iter;
+    gtk_list_store_append(store, &iter);
+    gtk_list_store_set(store, &iter, 0, "..", -1);
+
     DIR* dir = opendir(path);
     if (dir) {
         struct dirent* entry;
         while ((entry = readdir(dir)) != NULL) {
             if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-                GtkTreeIter iter;
                 gtk_list_store_append(store, &iter);
                 gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
             }
@@ -164,11 +168,23 @@ void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColu
 
         if (selected_dir) {
             char new_path[512];
-            snprintf(new_path, sizeof(new_path), "%s/%s", (char*)user_data, selected_dir);
+            if (strcmp(selected_dir, "..") == 0) {
+                // Navigate to the parent directory
+                strncpy(new_path, (char*)user_data, sizeof(new_path));
+                char* last_slash = strrchr(new_path, '/');
+                if (last_slash) {
+                    *last_slash = '\0';
+                } else {
+                    snprintf(new_path, sizeof(new_path), "/"); // Root directory fallback
+                }
+            } else {
+                snprintf(new_path, sizeof(new_path), "%s/%s", (char*)user_data, selected_dir);
+            }
 
             struct stat path_stat;
             if (stat(new_path, &path_stat) == 0 && S_ISDIR(path_stat.st_mode)) {
                 update_file_list(new_path);
+                strncpy((char*)user_data, new_path, 512); // Update the current path
             }
 
             g_free(selected_dir);
