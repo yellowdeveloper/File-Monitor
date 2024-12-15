@@ -108,8 +108,13 @@ void signal_handler(int signal) {
 }
 
 void update_file_list(const char* path) {
-    GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
-    gtk_list_store_clear(store);
+    if (!file_list) {
+        fprintf(stderr, "Error: file_list is not initialized\n");
+        return;
+    }
+
+    GtkListStore* model = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
+    gtk_list_store_clear(model);
 
     DIR* dir = opendir(path);
     if (dir) {
@@ -123,6 +128,8 @@ void update_file_list(const char* path) {
             }
         }
         closedir(dir);
+    } else {
+        fprintf(stderr, "Error: Could not open directory %s\n", path);
     }
 }
 
