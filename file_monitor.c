@@ -69,15 +69,22 @@ void init_log_ui() {
     gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
     gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
 
-    // 상단에 디렉토리 목록을 보여줄 박스 생성
+    // 상단 영역: 디렉토리 목록을 포함
     GtkWidget *topLabel = gtk_label_new("Monitoring Directories:");
     gtk_widget_set_halign(topLabel, GTK_ALIGN_START);
     gtk_widget_set_margin_top(topLabel, 10);
 
     directoryListBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 박스
+
+    // 디렉토리 리스트 박스를 스크롤 가능하도록 설정
+    GtkWidget *topScrollWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(topScrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_vexpand(topScrollWindow, TRUE); // 수직으로 확장 가능 설정
+    gtk_container_add(GTK_CONTAINER(topScrollWindow), directoryListBox);
+
     GtkWidget *topArea = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 상단 영역
-    gtk_box_pack_start(GTK_BOX(topArea), topLabel, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(topArea), directoryListBox, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(topArea), topLabel, FALSE, FALSE, 0); // 레이블 추가
+    gtk_box_pack_start(GTK_BOX(topArea), topScrollWindow, TRUE, TRUE, 0); // 스크롤 가능한 디렉토리 리스트 추가
 
     // 하단에 로그 출력을 위한 텍스트 뷰 생성
     logTextView = gtk_text_view_new();
@@ -91,7 +98,7 @@ void init_log_ui() {
 
     // 전체 레이아웃 구성
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 레이아웃 박스
-    gtk_box_pack_start(GTK_BOX(vbox), topArea, FALSE, FALSE, 0); // 상단 영역 추가
+    gtk_box_pack_start(GTK_BOX(vbox), topArea, TRUE, TRUE, 0); // 상단 영역 추가
     gtk_box_pack_end(GTK_BOX(vbox), scrollWindow, TRUE, TRUE, 0); // 하단 로그 창 추가
 
     gtk_container_add(GTK_CONTAINER(logWindow), vbox); // 메인 윈도우에 레이아웃 추가
@@ -202,7 +209,7 @@ void add_watch_recursive(const char *path) {
         snprintf(subPath, sizeof(subPath), "%s/%s", path, entry->d_name);
 
         struct stat pathStat;
-        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) {
+        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) { // 하위 디렉토리 확인
             add_watch_recursive(subPath);
         }
     }
