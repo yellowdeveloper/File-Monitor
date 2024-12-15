@@ -260,6 +260,8 @@ GtkWidget* create_window(const char* path) {
     // Add the vbox to the window
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
+    update_file_list(path);
+
     return window;
 
 }
