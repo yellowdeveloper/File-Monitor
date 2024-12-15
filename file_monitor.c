@@ -246,11 +246,11 @@ GtkWidget* create_window(const char* path) {
     // create text space (scroll available) : left
     scrolled_log = gtk_scrolled_window_new(NULL, NULL);
     text_view = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
-    gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolled_log), text_view);
 
     // get text buffer and show text at the top
-    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+    log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
     if(log_buffer) {
 	GtkTextIter start;
 	gtk_text_buffer_get_start_iter(log_buffer, &start);
