@@ -86,7 +86,7 @@ void log_event(const char* eventMessage) {
 
     // 메시지를 복사하여 GTK 메인 스레드에 전달
     char* messageCopy = strdup(eventMessage);
-    g_idle_add(update_ui_with_event, messageCopy);
+    g_idle_add(update_ui, messageCopy);
 
     // 콘솔에도 출력 (디버깅 용도)
     printf("%s\n", eventMessage);
