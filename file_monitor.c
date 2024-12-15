@@ -85,19 +85,21 @@ void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointe
 }
 
 void add_directory_to_list(const char *directory) {
+    // 이벤트 박스를 생성해 레이블을 감쌈
+    GtkWidget *eventBox = gtk_event_box_new();
     GtkWidget *label = gtk_label_new(directory);
-    gtk_widget_set_halign(label, GTK_ALIGN_START);
-    gtk_widget_set_margin_start(label, 10);
-    gtk_widget_set_margin_end(label, 10);
 
-    // 더블 클릭 이벤트를 감지하도록 이벤트 마스크 설정
-    gtk_widget_add_events(label, GDK_BUTTON_PRESS_MASK);
+    gtk_widget_set_halign(label, GTK_ALIGN_START); // 레이블 정렬 설정
+    gtk_container_add(GTK_CONTAINER(eventBox), label); // 이벤트 박스에 레이블 추가
+
+    // 더블 클릭 이벤트를 감지하도록 이벤트 박스에 이벤트 마스크 추가
+    gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
 
     // 더블 클릭 이벤트 연결
-    g_signal_connect(label, "button-press-event", G_CALLBACK(on_directory_double_click), (gpointer)directory);
+    g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), (gpointer)directory);
 
-    gtk_container_add(GTK_CONTAINER(directoryListBox), label);
-    gtk_widget_show(label);
+    gtk_container_add(GTK_CONTAINER(directoryListBox), eventBox); // 상위 박스에 이벤트 박스 추가
+    gtk_widget_show_all(eventBox); // 이벤트 박스와 내부 위젯 표시
 }
 
 // 로그 파일 초기화 함수
