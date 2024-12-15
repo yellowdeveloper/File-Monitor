@@ -345,11 +345,6 @@ void signal_handler(int signum) {
     gtk_main_quit();
 }
 
-void signal_handler(int signum) {
-    keep_running = false;
-    gtk_main_quit();
-}
-
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "USAGE: file_monitor CONFIG_PATH\n");
