@@ -30,10 +30,12 @@ FILE* logFile = NULL;                // 로그 파일 포인터
 char logFilePath[512];               // 로그 파일 경로 (설정에서 읽음)
 char filteredExtension[64] = "";     // 필터링할 확장자 (설정에서 읽음)
 
-GtkWidget *logWindow;    // 로그 출력용 창
-GtkWidget *logTextView;  // 로그 출력용 텍스트 뷰
-GtkTextBuffer *logBuffer; // 텍스트 버퍼
+GtkWidget *logWindow;
+GtkWidget *logTextView;
+GtkTextBuffer *logBuffer;
 GtkWidget *directoryListBox;
+GtkWidget *directoryContentsBox;
+
 
 // 디렉토리와 watch descriptor (wd)의 매핑 테이블
 typedef struct {
@@ -43,6 +45,56 @@ typedef struct {
 
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
 int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
+
+void show_directory_contents(const char *directory) {
+    // 기존 내용 삭제
+    GList *children = gtk_container_get_children(GTK_CONTAINER(directoryContentsBox));
+    for (GList *iter = children; iter != NULL; iter = iter->next) {
+        gtk_widget_destroy(GTK_WIDGET(iter->data));
+    }
+    g_list_free(children);
+
+    // 디렉토리 읽기
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("Error opening directory");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        GtkWidget *label = gtk_label_new(entry->d_name); // 파일/디렉토리 이름 레이블 생성
+        gtk_widget_set_halign(label, GTK_ALIGN_START);
+        gtk_container_add(GTK_CONTAINER(directoryContentsBox), label);
+        gtk_widget_show(label);
+    }
+
+    closedir(dir);
+}
+
+void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
+        const char *directory = (const char *)data;
+        show_directory_contents(directory); // 디렉토리 내용 표시
+    }
+}
+
+void add_directory_to_list(const char *directory) {
+    GtkWidget *label = gtk_label_new(directory);
+    gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_widget_set_margin_start(label, 10);
+    gtk_widget_set_margin_end(label, 10);
+
+    // 더블 클릭 이벤트 연결
+    g_signal_connect(label, "button-press-event", G_CALLBACK(on_directory_double_click), (gpointer)directory);
+
+    gtk_container_add(GTK_CONTAINER(directoryListBox), label);
+    gtk_widget_show(label);
+}
 
 void add_directory_to_list(const char *directory) {
     GtkWidget *label = gtk_label_new(directory); // 디렉토리를 레이블로 표시
@@ -67,50 +119,68 @@ void init_log_ui() {
     // 메인 윈도우 생성
     logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
-    gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
+    gtk_window_set_default_size(GTK_WINDOW(logWindow), 1000, 600);
 
     // === 상단 영역: 디렉토리 목록 ===
-    GtkWidget *directoryHeader = gtk_header_bar_new(); // 상단 제목 표시줄
+    GtkWidget *directoryHeader = gtk_header_bar_new();
     gtk_header_bar_set_title(GTK_HEADER_BAR(directoryHeader), "Monitoring Directories");
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(directoryHeader), FALSE);
 
-    directoryListBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 디렉토리 목록
-    GtkWidget *topScrollWindow = gtk_scrolled_window_new(NULL, NULL); // 스크롤 가능한 창
+    directoryListBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    GtkWidget *topScrollWindow = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(topScrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_container_add(GTK_CONTAINER(topScrollWindow), directoryListBox);
 
-    GtkWidget *topFrame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0); // 상단 영역 박스
-    gtk_box_pack_start(GTK_BOX(topFrame), directoryHeader, FALSE, FALSE, 0); // 제목 표시줄 추가
-    gtk_box_pack_start(GTK_BOX(topFrame), topScrollWindow, TRUE, TRUE, 0); // 스크롤 창 추가
+    GtkWidget *topFrame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(topFrame), directoryHeader, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(topFrame), topScrollWindow, TRUE, TRUE, 0);
+
+    // === 오른쪽 영역: 디렉토리 내용 ===
+    GtkWidget *contentsHeader = gtk_header_bar_new();
+    gtk_header_bar_set_title(GTK_HEADER_BAR(contentsHeader), "Directory Contents");
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(contentsHeader), FALSE);
+
+    directoryContentsBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    GtkWidget *contentsScrollWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(contentsScrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(contentsScrollWindow), directoryContentsBox);
+
+    GtkWidget *contentsFrame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(contentsFrame), contentsHeader, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(contentsFrame), contentsScrollWindow, TRUE, TRUE, 0);
 
     // === 하단 영역: 로그 창 ===
-    GtkWidget *logHeader = gtk_header_bar_new(); // 하단 제목 표시줄
+    GtkWidget *logHeader = gtk_header_bar_new();
     gtk_header_bar_set_title(GTK_HEADER_BAR(logHeader), "Event Logs");
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(logHeader), FALSE);
 
     logTextView = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE); // 읽기 전용
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE);
     logBuffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
 
-    GtkWidget *logScrollWindow = gtk_scrolled_window_new(NULL, NULL); // 로그 창 스크롤
+    GtkWidget *logScrollWindow = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(logScrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_container_add(GTK_CONTAINER(logScrollWindow), logTextView);
 
-    GtkWidget *bottomFrame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0); // 하단 영역 박스
-    gtk_box_pack_start(GTK_BOX(bottomFrame), logHeader, FALSE, FALSE, 0); // 제목 표시줄 추가
-    gtk_box_pack_start(GTK_BOX(bottomFrame), logScrollWindow, TRUE, TRUE, 0); // 로그 창 추가
+    GtkWidget *bottomFrame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(bottomFrame), logHeader, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(bottomFrame), logScrollWindow, TRUE, TRUE, 0);
 
     // === 전체 레이아웃 ===
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 레이아웃 박스
-    gtk_box_pack_start(GTK_BOX(vbox), topFrame, TRUE, TRUE, 0); // 상단 영역 추가
-    gtk_box_pack_end(GTK_BOX(vbox), bottomFrame, TRUE, TRUE, 0); // 하단 영역 추가
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5); // 상단+오른쪽 수평 박스
+    gtk_box_pack_start(GTK_BOX(hbox), topFrame, TRUE, TRUE, 0);   // 상단 영역
+    gtk_box_pack_start(GTK_BOX(hbox), contentsFrame, TRUE, TRUE, 0); // 오른쪽 영역
 
-    gtk_container_add(GTK_CONTAINER(logWindow), vbox); // 메인 윈도우에 레이아웃 추가
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 레이아웃
+    gtk_box_pack_start(GTK_BOX(vbox), hbox, TRUE, TRUE, 0);     // 상단+오른쪽
+    gtk_box_pack_end(GTK_BOX(vbox), bottomFrame, TRUE, TRUE, 0); // 하단 로그
+
+    gtk_container_add(GTK_CONTAINER(logWindow), vbox);
 
     // 창 닫기 이벤트 처리
     g_signal_connect(logWindow, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    gtk_widget_show_all(logWindow); // 모든 위젯 표시
+    gtk_widget_show_all(logWindow);
 }
 
 gboolean update_ui(gpointer data) {
@@ -122,10 +192,9 @@ gboolean update_ui(gpointer data) {
     gtk_text_buffer_insert(logBuffer, &endIter, eventMessage, -1);
     gtk_text_buffer_insert(logBuffer, &endIter, "\n", -1);
 
-    // 동적 메모리 해제
     free(data);
 
-    return FALSE; // 작업 완료 후 다시 호출하지 않음
+    return FALSE;
 }
 
 
@@ -140,7 +209,6 @@ void log_event(const char* eventMessage) {
     char* messageCopy = strdup(eventMessage);
     g_idle_add(update_ui, messageCopy);
 
-    // 콘솔에도 출력 (디버깅 용도)
     printf("%s\n", eventMessage);
 }
 
