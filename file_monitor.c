@@ -231,12 +231,12 @@ GtkWidget* create_window(const char* path) {
     GtkWidget *window, *vbox, *button, *scrolled_log, *text_view;
 
     // create main window
-    GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
     // divide window
-    vbox = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    vbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
 
     // add a button to open the directory chooser dialog
     button = gtk_button_new_with_label("Open Directory");
