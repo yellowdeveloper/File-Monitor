@@ -157,7 +157,7 @@ void add_directory_to_list(const char *directory) {
     char *pathCopy = strdup(directory); // 경로 복사
     gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
     g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), pathCopy);
-    
+
     // 클릭 이벤트 연결
     g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_clicked), NULL);
 
@@ -469,6 +469,7 @@ int main(int argc, char** argv) {
     read_config(argv[1], monitoredDirs, &dirCount); // 설정 파일 읽기
     init_log_file(logFilePath); // 로그 파일 초기화
     init_log_ui();
+    initialize_css();
 
     check_filtered_extension();  // 필터링 확장자 확인 (한 번만 출력)
 
