@@ -61,15 +61,29 @@ void init_log_ui() {
     gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
     gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
 
-    // 텍스트 뷰 생성
+    // 상단에 새로운 영역을 위한 레이블 생성
+    GtkWidget *topLabel = gtk_label_new("File Monitor - Monitoring Status");
+    gtk_widget_set_halign(topLabel, GTK_ALIGN_CENTER);
+    gtk_widget_set_margin_top(topLabel, 10);
+    gtk_widget_set_margin_bottom(topLabel, 10);
+
+    // 로그 출력을 위한 텍스트 뷰 생성
     logTextView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE); // 읽기 전용
     logBuffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
 
-    // 스크롤 가능한 창에 텍스트 뷰 추가
+    // 텍스트 뷰를 스크롤 가능한 창에 추가
     GtkWidget *scrollWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_container_add(GTK_CONTAINER(scrollWindow), logTextView);
-    gtk_container_add(GTK_CONTAINER(logWindow), scrollWindow);
+
+    // 수직 박스(상자) 생성
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 방향, 간격 5px
+    gtk_container_add(GTK_CONTAINER(logWindow), vbox);
+
+    // 상자에 위젯 추가 (위: 레이블, 아래: 텍스트 뷰)
+    gtk_box_pack_start(GTK_BOX(vbox), topLabel, FALSE, FALSE, 0); // 상단 레이블 추가
+    gtk_box_pack_end(GTK_BOX(vbox), scrollWindow, TRUE, TRUE, 0); // 하단 텍스트 뷰 추가
 
     // 창 닫기 이벤트 처리
     g_signal_connect(logWindow, "destroy", G_CALLBACK(gtk_main_quit), NULL);
