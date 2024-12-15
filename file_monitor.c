@@ -236,9 +236,11 @@ void process_event(const struct inotify_event* watchEvent) {
         // 이벤트 종류에 따라 메시지 작성
         if (watchEvent->mask & IN_CREATE) {
             strcat(notificationMessage, "created");
+            g_idle_add((GSourceFunc)update_file_list, g_strdup(monitored_path));
         }
         else if (watchEvent->mask & IN_DELETE) {
             strcat(notificationMessage, "deleted");
+            g_idle_add((GSourceFunc)update_file_list, g_strdup(monitored_path));
         }
         else if (watchEvent->mask & IN_MODIFY) {
             strcat(notificationMessage, "modified");
