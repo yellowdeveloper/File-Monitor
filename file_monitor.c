@@ -66,10 +66,16 @@ void init_log_ui() {
 
     // 메인 윈도우 생성
     logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
     gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
 
-    // 상단 영역
+    // === 제목 표시줄 (Header Bar) 생성 ===
+    GtkWidget *headerBar = gtk_header_bar_new();
+    gtk_header_bar_set_title(GTK_HEADER_BAR(headerBar), "File Monitor");
+    gtk_header_bar_set_subtitle(GTK_HEADER_BAR(headerBar), "Monitoring File System Events");
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerBar), TRUE);
+    gtk_window_set_titlebar(GTK_WINDOW(logWindow), headerBar);
+
+    // === 상단 영역 ===
     GtkWidget *directoryTitle = gtk_label_new("Monitoring Directories:");
     gtk_widget_set_halign(directoryTitle, GTK_ALIGN_START);
     gtk_widget_set_margin_top(directoryTitle, 10);
@@ -84,7 +90,7 @@ void init_log_ui() {
     gtk_box_pack_start(GTK_BOX(topArea), directoryTitle, FALSE, FALSE, 0); // 제목 추가
     gtk_box_pack_start(GTK_BOX(topArea), topScrollWindow, TRUE, TRUE, 0); // 스크롤 창 추가
 
-    // 하단 영역
+    // === 하단 영역 ===
     GtkWidget *logTitle = gtk_label_new("Event Logs:");
     gtk_widget_set_halign(logTitle, GTK_ALIGN_START);
     gtk_widget_set_margin_top(logTitle, 10);
@@ -101,7 +107,7 @@ void init_log_ui() {
     gtk_box_pack_start(GTK_BOX(bottomArea), logTitle, FALSE, FALSE, 0); // 제목 추가
     gtk_box_pack_start(GTK_BOX(bottomArea), scrollWindow, TRUE, TRUE, 0); // 로그 창 추가
 
-    // 전체 레이아웃
+    // === 전체 레이아웃 ===
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 레이아웃 박스
     gtk_box_pack_start(GTK_BOX(vbox), topArea, TRUE, TRUE, 0); // 상단 영역 추가
     gtk_box_pack_end(GTK_BOX(vbox), bottomArea, TRUE, TRUE, 0); // 하단 영역 추가
