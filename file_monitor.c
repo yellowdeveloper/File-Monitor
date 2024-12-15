@@ -273,6 +273,13 @@ void* inotify_thread(void* arg) {
     return NULL;
 }
 
+void on_destroy(GtkWidget* widget, gpointer data) {
+    if (IeventQueue != -1) {
+        close(IeventQueue);
+    }
+    gtk_main_quit();
+}
+
 GtkWidget* create_window(const char* path) {
     // create main window
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
