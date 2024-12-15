@@ -277,6 +277,9 @@ GtkWidget* create_window(const char* root_path) {
     gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
     gtk_container_add(GTK_CONTAINER(window), paned);
 
+    // 초기 디렉토리 파일 목록 표시
+    update_file_list(root_path);
+
     return window;
 }
 
