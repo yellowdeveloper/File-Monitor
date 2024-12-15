@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <gtk/gtk.h>
 #include <glib.h>
+#include <limits.h>
 
 #define EXT_SUCCESS 0                // 성공 코드
 #define EXT_ERR_TOO_FEW_ARGS 1       // 인자 부족 오류 코드
@@ -54,7 +55,7 @@ void show_directory_contents(const char *directory) {
     }
     g_list_free(children);
 
-    // 디렉토리 읽기
+    // 디렉토리 열기
     DIR *dir = opendir(directory);
     if (!dir) {
         perror("Error opening directory");
@@ -64,13 +65,27 @@ void show_directory_contents(const char *directory) {
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
+            continue; // 현재 디렉토리와 부모 디렉토리는 무시
         }
 
-        GtkWidget *label = gtk_label_new(entry->d_name); // 파일/디렉토리 이름 레이블 생성
+        // 항목의 전체 경로 생성
+        char fullPath[PATH_MAX];
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", directory, entry->d_name);
+
+        // 레이블 생성
+        GtkWidget *eventBox = gtk_event_box_new();
+        GtkWidget *label = gtk_label_new(entry->d_name);
+
         gtk_widget_set_halign(label, GTK_ALIGN_START);
-        gtk_container_add(GTK_CONTAINER(directoryContentsBox), label);
-        gtk_widget_show(label);
+        gtk_container_add(GTK_CONTAINER(eventBox), label);
+
+        // 더블 클릭 이벤트 연결
+        char *pathCopy = strdup(fullPath); // 경로를 복사해 이벤트 핸들러로 전달
+        gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
+        g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), pathCopy);
+
+        gtk_container_add(GTK_CONTAINER(directoryContentsBox), eventBox);
+        gtk_widget_show_all(eventBox);
     }
 
     closedir(dir);
@@ -78,28 +93,34 @@ void show_directory_contents(const char *directory) {
 
 void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
-        const char *directory = (const char *)data;
-        printf("Double-clicked directory: %s\n", directory); // 디버깅 출력
-        show_directory_contents(directory); // 디렉토리 내용 표시
+        const char *clickedPath = (const char *)data;
+
+        // 클릭된 디렉토리의 절대 경로를 생성
+        char absolutePath[PATH_MAX];
+        realpath(clickedPath, absolutePath);
+
+        printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
+
+        // 디렉토리 내용을 표시
+        show_directory_contents(absolutePath);
     }
 }
 
+// 디렉토리 목록에 아이템 추가
 void add_directory_to_list(const char *directory) {
-    // 이벤트 박스를 생성해 레이블을 감쌈
     GtkWidget *eventBox = gtk_event_box_new();
     GtkWidget *label = gtk_label_new(directory);
 
-    gtk_widget_set_halign(label, GTK_ALIGN_START); // 레이블 정렬 설정
-    gtk_container_add(GTK_CONTAINER(eventBox), label); // 이벤트 박스에 레이블 추가
-
-    // 더블 클릭 이벤트를 감지하도록 이벤트 박스에 이벤트 마스크 추가
-    gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
+    gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_container_add(GTK_CONTAINER(eventBox), label);
 
     // 더블 클릭 이벤트 연결
-    g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), (gpointer)directory);
+    char *pathCopy = strdup(directory); // 경로 복사
+    gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
+    g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), pathCopy);
 
-    gtk_container_add(GTK_CONTAINER(directoryListBox), eventBox); // 상위 박스에 이벤트 박스 추가
-    gtk_widget_show_all(eventBox); // 이벤트 박스와 내부 위젯 표시
+    gtk_container_add(GTK_CONTAINER(directoryListBox), eventBox);
+    gtk_widget_show_all(eventBox);
 }
 
 // 로그 파일 초기화 함수
