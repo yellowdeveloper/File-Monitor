@@ -51,7 +51,7 @@ static gboolean on_titlebar_double_click(GtkWidget* widget, GdkEventButton* even
             gtk_paned_set_position(paned, 0); // Minimize the right pan
         } else {
             gtk_widget_show(file_list); // Show the file list
-            gtk_paned_set_position(paned, 0); // Restore default size
+            gtk_paned_set_position(paned, 400); // Restore default size
         }
         expanded = !expanded;
     }
