@@ -153,13 +153,13 @@ void add_directory_to_list(const char *directory) {
     gtk_widget_set_halign(label, GTK_ALIGN_START);
     gtk_container_add(GTK_CONTAINER(eventBox), label);
 
-    // 클릭 이벤트 연결
-    g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_clicked), NULL);
-
     // 더블 클릭 이벤트 연결
     char *pathCopy = strdup(directory); // 경로 복사
     gtk_widget_add_events(eventBox, GDK_BUTTON_PRESS_MASK);
     g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_double_click), pathCopy);
+    
+    // 클릭 이벤트 연결
+    g_signal_connect(eventBox, "button-press-event", G_CALLBACK(on_directory_clicked), NULL);
 
     gtk_container_add(GTK_CONTAINER(directoryListBox), eventBox);
     gtk_widget_show_all(eventBox);
