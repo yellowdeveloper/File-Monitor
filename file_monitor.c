@@ -46,9 +46,9 @@ static gboolean on_titlebar_double_click(GtkWidget* widget, GdkEventButton* even
 
     if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // Double click with left mouse button
         if (expanded) {
-            gtk_paned_set_position(paned, 0); // Minimize the right pan
+            gtk_paned_set_position(0, paned); // Minimize the right pan
         } else {
-            gtk_paned_set_position(paned, 400); // Restore default size
+            gtk_paned_set_position(400, paned); // Restore default size
         }
         expanded = !expanded;
     }
