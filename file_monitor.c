@@ -79,6 +79,21 @@ void init_log_ui() {
 
 // 로그 이벤트 함수
 void log_event(const char* eventMessage) {
+    if (!eventMessage || strlen(eventMessage) == 0) {
+        fprintf(stderr, "Invalid event message\n");
+        return;
+    }
+
+    // 메시지를 복사하여 GTK 메인 스레드에 전달
+    char* messageCopy = strdup(eventMessage);
+    g_idle_add(update_ui_with_event, messageCopy);
+
+    // 콘솔에도 출력 (디버깅 용도)
+    printf("%s\n", eventMessage);
+}
+
+gboolean update_ui(gpointer data) {
+    const char* eventMessage = (const char*)data;
     GtkTextIter endIter;
 
     // 텍스트 버퍼의 끝에 메시지 추가
@@ -86,8 +101,10 @@ void log_event(const char* eventMessage) {
     gtk_text_buffer_insert(logBuffer, &endIter, eventMessage, -1);
     gtk_text_buffer_insert(logBuffer, &endIter, "\n", -1);
 
-    // 콘솔에도 출력 (디버깅 용도)
-    printf("%s\n", eventMessage);
+    // 동적 메모리 해제
+    free(data);
+
+    return FALSE; // 작업 완료 후 다시 호출하지 않음
 }
 
 // 설정 파일에서 디렉토리 및 로그 파일 경로 읽기
