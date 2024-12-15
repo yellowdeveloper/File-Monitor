@@ -36,6 +36,10 @@ char logFilePath[512] = "";
 volatile bool keep_running = true;
 volatile bool logBufferDirty = false;
 
+char* dynamicLogBuffer = NULL;
+size_t dynamicLogBufferSize = 0;
+size_t dynamicLogBufferCapacity = 8192;
+
 void init_log_file(const char* path) {
     logFile = fopen(path, "a");
     if (!logFile) {
@@ -43,6 +47,13 @@ void init_log_file(const char* path) {
         exit(EXIT_FAILURE);
     }
     printf("Log file initialized at: %s\n", path);
+
+    dynamicLogBuffer = malloc(dynamicLogBufferCapacity);
+    if (!dynamicLogBuffer) {
+        perror("Failed to allocate log buffer");
+        exit(EXIT_FAILURE);
+    }
+    dynamicLogBuffer[0] = '\0';
 }
 
 gboolean update_log_buffer(gpointer data) {
@@ -60,33 +71,31 @@ gboolean update_log_buffer(gpointer data) {
 }
 
 void log_event(const char* eventMessage) {
-    static char logBuffer[8192] = "";
-    static size_t logBufferSize = 0;
-
     size_t messageLength = strlen(eventMessage) + 1; // Include newline
-    if (logBufferSize + messageLength > sizeof(logBuffer) - 1) {
-        if (logFile) {
-            fprintf(logFile, "%s", logBuffer);
-            fflush(logFile);
+
+    if (dynamicLogBufferSize + messageLength > dynamicLogBufferCapacity - 1) {
+        dynamicLogBufferCapacity *= 2;
+        dynamicLogBuffer = realloc(dynamicLogBuffer, dynamicLogBufferCapacity);
+        if (!dynamicLogBuffer) {
+            perror("Failed to reallocate log buffer");
+            exit(EXIT_FAILURE);
         }
-        logBufferSize = 0;
-        logBuffer[0] = '\0';
     }
 
-    strcat(logBuffer, eventMessage);
-    strcat(logBuffer, "\n");
-    logBufferSize += messageLength;
+    strcat(dynamicLogBuffer, eventMessage);
+    strcat(dynamicLogBuffer, "\n");
+    dynamicLogBufferSize += messageLength;
 
     logBufferDirty = true;
     g_idle_add(update_log_buffer, g_strdup(eventMessage));
 }
 
 void flush_log_buffer() {
-    static char logBuffer[8192] = "";
     if (logFile && logBufferDirty) {
-        fprintf(logFile, "%s", logBuffer);
+        fprintf(logFile, "%s", dynamicLogBuffer);
         fflush(logFile);
-        logBuffer[0] = '\0';
+        dynamicLogBuffer[0] = '\0';
+        dynamicLogBufferSize = 0;
         logBufferDirty = false;
     }
 }
@@ -167,6 +176,48 @@ void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColu
     }
 }
 
+void* inotify_thread(void* arg) {
+    size_t bufferSize = 4096;
+    char* buffer = malloc(bufferSize);
+    if (!buffer) {
+        perror("Failed to allocate buffer");
+        return NULL;
+    }
+
+    while (keep_running) {
+        int length = read(IeventQueue, buffer, bufferSize);
+        if (length < 0) {
+            perror("Error reading inotify events");
+            break;
+        }
+
+        if (length == bufferSize) {
+            bufferSize *= 2;
+            buffer = realloc(buffer, bufferSize);
+            if (!buffer) {
+                perror("Failed to reallocate buffer");
+                break;
+            }
+        }
+
+        for (int i = 0; i < length;) {
+            struct inotify_event* event = (struct inotify_event*)&buffer[i];
+            if (event->len > 0) {
+                char message[512];
+                snprintf(message, sizeof(message), "Event: %s on %s", 
+                         (event->mask & IN_CREATE) ? "Created" : 
+                         (event->mask & IN_DELETE) ? "Deleted" : "Modified",
+                         event->name);
+                log_event(message);
+            }
+            i += sizeof(struct inotify_event) + event->len;
+        }
+    }
+
+    free(buffer);
+    return NULL;
+}
+
 void add_watch_recursive(const char* path) {
     DIR* dir = opendir(path);
     if (!dir) {
@@ -231,6 +282,7 @@ GtkWidget* create_window(const char* root_path) {
 
 void signal_handler(int signum) {
     keep_running = false;
+    gtk_main_quit();
 }
 
 int main(int argc, char** argv) {
@@ -263,7 +315,14 @@ int main(int argc, char** argv) {
     pthread_t thread;
     if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
         perror("Error creating inotify thread");
-        return EXIT_FAILURE;
+        flush_log_buffer();
+        for (int i = 0; i < monitoredDirCount; ++i) {
+            free(monitoredDirs[i]);
+        }
+        free(monitoredDirs);
+        free(dynamicLogBuffer);
+        fclose(logFile);
+        exit(EXIT_FAILURE);
     }
 
     gtk_widget_show_all(window);
@@ -278,6 +337,7 @@ int main(int argc, char** argv) {
         free(monitoredDirs[i]);
     }
     free(monitoredDirs);
+    free(dynamicLogBuffer);
 
     if (logFile) fclose(logFile);
     return EXT_SUCCESS;
