@@ -25,18 +25,27 @@
 #define EXT_ERR_LIBNOTIFY 6
 
 // global variables 
-int IeventStatus = -1; // inotify watch status
+// int IeventStatus = -1; // inotify watch status
 int IeventQueue = -1; // inotify waiting queue
 char* ProgramTitle = "file_monitor"; // title of program
 FILE* logFile = NULL; // log file pointer
-const char* filteredExtension = NULL; // file extension to filter
+char filteredExtension[64] = "";   // file extension to filter
 // int emailEnabled = 0; // email notificaton activate status
 // const char* emailRecipient = NULL; // email receiver
-const char* logFilePath = NULL; // log file path
+char logFilePath[512]; // log file path
 time_t lastEventTime = 0; // last event occur time
+
 GtkTextBuffer *log_buffer = NULL; // log text buffer
 GtkWidget* file_list = NULL; // directory to monitor
 char monitored_path[512];
+
+typedef struct {
+    int wd;                           // watch descriptor
+    char path[512];                   // directory path
+} WatchDescriptor;
+
+WatchDescriptor watchDescriptors[512];  // watch descriptor array
+int watchDescriptorCount = 0;           // number of watch descriptor assigned
 
 // recurrent function and log file size check
 void rotate_log_file(const char* logPath) {
@@ -50,7 +59,7 @@ void rotate_log_file(const char* logPath) {
         perror("Error opening log file");
         exit(EXIT_FAILURE);
     }
-    printf("Log file created/opened at: %s\n", logPath); // ����� �޽���
+    printf("Log file created/opened at: %s\n", logPath); 
 }
 
 // callback func to use in g_idle_add() func
@@ -193,14 +202,46 @@ void on_destroy(GtkWidget* widget, gpointer data) {
     gtk_main_quit();
 }
 
+void on_open_directory_clicked(GtkWidget *button, gpointer user_data) {
+    GtkWidget *dialog;
+    GtkWindow *parent = GTK_WINDOW(user_data);
+
+    // Create a FileChooserDialog
+    dialog = gtk_file_chooser_dialog_new("Open Directory",
+                                         parent,
+                                         GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                                         "_Cancel", GTK_RESPONSE_CANCEL,
+                                         "_Open", GTK_RESPONSE_ACCEPT,
+                                         NULL);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *folder;
+        folder = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        strncpy(monitored_path, folder, sizeof(monitored_path) - 1);
+        monitored_path[sizeof(monitored_path) - 1] = '\0';
+
+        printf("Selected directory: %s\n", monitored_path);
+        g_free(folder);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
 GtkWidget* create_window(const char* path) {
+    GtkWidget *window, *vbox, *button, *scrolled_log, *text_view;
+
     // create main window
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
     // divide window
-    GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    vbox = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL, 5);
+
+    // add a button to open the directory chooser dialog
+    button = gtk_button_new_with_label("Open Directory");
+    g_signal_connect(button, "clicked", G_CALLBACK(on_open_directory_clicked), window);
+    gtk_box_pack_start(GTK_BOX(vbox), button, FALSE, FALSE, 5);
 
     // create text space (scroll available) : left
     GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
@@ -216,29 +257,8 @@ GtkWidget* create_window(const char* path) {
 	gtk_text_buffer_insert(log_buffer, &start, "waiting for events...\n", -1);
     }
 
-    // dir files : right
-    GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
-    file_list = gtk_tree_view_new();
-
-    // set dir model
-    GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
-    gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
-
-    // add colum (file name)
-    GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
-    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
-    gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
-    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
-
-    // add to Paned
-    gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
-    gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
-
-    // add to window Paned
-    gtk_container_add(GTK_CONTAINER(window), paned);
-
-    // initialize file list
-    update_file_list(path);
+    // Add the vbox to the window
+    gtk_container_add(GTK_CONTAINER(window), vbox);
 
     return window;
 
