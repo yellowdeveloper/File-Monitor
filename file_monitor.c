@@ -43,14 +43,14 @@ size_t dynamicLogBufferCapacity = 8192;
 static gboolean on_titlebar_double_click(GtkWidget* widget, GdkEventButton* event, gpointer user_data) {
     static gboolean expanded = TRUE; // Track the expanded state
     GtkPaned* paned = GTK_PANED(user_data);
-    GtkWidget* scrolled_files = g_object_get_data(G_OBJECT(paned), "scrolled_files");
+    GtkWidget* file_list_container = g_object_get_data(G_OBJECT(paned), "file_list_container");
 
     if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // Double click with left mouse button
         if (expanded) {
-            gtk_widget_hide(scrolled_files); // Hide the file list
+            gtk_widget_hide(file_list); // Hide the file list
             gtk_paned_set_position(paned, 0); // Minimize the right pan
         } else {
-            gtk_widget_show(scrolled_files); // Show the file list
+            gtk_widget_show(file_list); // Show the file list
             gtk_paned_set_position(paned, 400); // Restore default size
         }
         expanded = !expanded;
@@ -320,7 +320,7 @@ GtkWidget* create_window(const char* root_path) {
 
     g_signal_connect(titlebar, "button-press-event", G_CALLBACK(on_titlebar_double_click), paned);
 
-    g_object_set_data(G_OBJECT(paned), "scrolled_files", scrolled_files);
+    g_object_set_data(G_OBJECT(paned), "file_list_container", file_list_container);
 
     file_list = gtk_tree_view_new();
     GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
