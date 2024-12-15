@@ -40,6 +40,21 @@ char* dynamicLogBuffer = NULL;
 size_t dynamicLogBufferSize = 0;
 size_t dynamicLogBufferCapacity = 8192;
 
+static gboolean on_titlebar_double_click(GtkWidget* widget, GdkEventButton* event, gpointer user_data) {
+    static gboolean expanded = TRUE; // Track the expanded state
+    GtkPaned* paned = GTK_PANED(user_data);
+
+    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // Double click with left mouse button
+        if (expanded) {
+            gtk_paned_set_position(paned, 0); // Minimize the right pan
+        } else {
+            gtk_paned_set_position(paned, 400); // Restore default size
+        }
+        expanded = !expanded;
+    }
+    return TRUE;
+}
+
 bool is_child_of_monitored_dir(const char* path) {
     for (int i = 0; i < monitoredDirCount; ++i) {
         size_t len = strlen(monitoredDirs[i]);
@@ -293,25 +308,30 @@ GtkWidget* create_window(const char* root_path) {
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
 
     GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
-    char files_pane_title[512];
-    snprintf(files_pane_title, sizeof(files_pane_title), "Directory: %s", root_path);
+    GtkWidget* file_list_container = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+    GtkWidget* titlebar = gtk_event_box_new();
+    GtkWidget* title_label = gtk_label_new("File List");
+    gtk_container_add(GTK_CONTAINER(titlebar), title_label);
+    gtk_box_pack_start(GTK_BOX(file_list_container), titlebar, FALSE, FALSE, 0);
+
+    g_signal_connect(titlebar, "button-press-event", G_CALLBACK(on_titlebar_double_click), paned);
+
     file_list = gtk_tree_view_new();
     GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
     GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
-    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes(files_pane_title, renderer, "text", 0, NULL);
+    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
-    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
 
-    g_signal_connect(file_list, "row-activated", G_CALLBACK(on_row_activated), (gpointer)root_path);
+    gtk_box_pack_start(GTK_BOX(file_list_container), file_list, TRUE, TRUE, 0);
+    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list_container);
 
     gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
     gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
     gtk_container_add(GTK_CONTAINER(window), paned);
 
-    // 초기 디렉토리 파일 목록 표시
     update_file_list(root_path);
-
     return window;
 }
 
