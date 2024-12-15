@@ -145,65 +145,26 @@ void update_file_list(const char* path) {
     }
 }
 
-void process_event(const struct inotify_event* watchEvent) {
-    if (watchEvent->len > 0) {
-        char notificationMessage[512];
-        char eventTime[64];
-        time_t currentTime = time(NULL);
+void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColumn* column, gpointer user_data) {
+    GtkTreeModel* model = gtk_tree_view_get_model(tree_view);
+    GtkTreeIter iter;
 
-        strftime(eventTime, sizeof(eventTime), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
-        snprintf(notificationMessage, sizeof(notificationMessage), "[%s] File %s: ", eventTime, watchEvent->name);
+    if (gtk_tree_model_get_iter(model, &iter, path)) {
+        gchar* selected_dir = NULL;
+        gtk_tree_model_get(model, &iter, 0, &selected_dir, -1);
 
-        if (watchEvent->mask & IN_CREATE) {
-            strcat(notificationMessage, "created");
-        } else if (watchEvent->mask & IN_DELETE) {
-            strcat(notificationMessage, "deleted");
-        } else if (watchEvent->mask & IN_MODIFY) {
-            strcat(notificationMessage, "modified");
-        } else {
-            strcat(notificationMessage, "unknown event");
-        }
+        if (selected_dir) {
+            char new_path[512];
+            snprintf(new_path, sizeof(new_path), "%s/%s", (char*)user_data, selected_dir);
 
-        log_event(notificationMessage);
-    }
-}
-
-void* inotify_thread(void* arg) {
-    size_t bufferSize = 4096;
-    char* buffer = malloc(bufferSize);
-    if (!buffer) {
-        perror("Failed to allocate buffer");
-        return NULL;
-    }
-
-    const struct inotify_event* watchEvent;
-
-    while (keep_running) {
-        int readLength = read(IeventQueue, buffer, bufferSize);
-        if (readLength == -1) {
-            perror("Error reading inotify instance");
-            break;
-        }
-
-        if (readLength == bufferSize) {
-            bufferSize *= 2;
-            buffer = realloc(buffer, bufferSize);
-            if (!buffer) {
-                perror("Failed to reallocate buffer");
-                break;
+            struct stat path_stat;
+            if (stat(new_path, &path_stat) == 0 && S_ISDIR(path_stat.st_mode)) {
+                update_file_list(new_path);
             }
-        }
 
-        for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
-            watchEvent = (const struct inotify_event*)buffPointer;
-            process_event(watchEvent);
-            buffPointer += sizeof(struct inotify_event) + watchEvent->len;
+            g_free(selected_dir);
         }
     }
-
-    flush_log_buffer();
-    free(buffer);
-    return NULL;
 }
 
 void add_watch_recursive(const char* path) {
@@ -238,7 +199,7 @@ void add_watch_recursive(const char* path) {
     closedir(dir);
 }
 
-GtkWidget* create_window() {
+GtkWidget* create_window(const char* root_path) {
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
@@ -258,6 +219,8 @@ GtkWidget* create_window() {
     GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
     gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
+
+    g_signal_connect(file_list, "row-activated", G_CALLBACK(on_row_activated), (gpointer)root_path);
 
     gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
     gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
@@ -292,7 +255,7 @@ int main(int argc, char** argv) {
 
     gtk_init(&argc, &argv);
 
-    GtkWidget* window = create_window();
+    GtkWidget* window = create_window(monitoredDirs[0]);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
     signal(SIGINT, signal_handler);
