@@ -40,6 +40,15 @@ char* dynamicLogBuffer = NULL;
 size_t dynamicLogBufferSize = 0;
 size_t dynamicLogBufferCapacity = 8192;
 
+bool is_monitored_dir(const char* path) {
+    for (int i = 0; i < monitoredDirCount; ++i) {
+        if (strcmp(monitoredDirs[i], path) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void init_log_file(const char* path) {
     logFile = fopen(path, "a");
     if (!logFile) {
@@ -140,16 +149,19 @@ void update_file_list(const char* path) {
     GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
     gtk_list_store_clear(store);
 
-    // Add '..' for navigating to the parent directory
-    GtkTreeIter iter;
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter, 0, "..", -1);
+    // Add '..' only if the directory is monitored
+    if (is_monitored_dir(path)) {
+        GtkTreeIter iter;
+        gtk_list_store_append(store, &iter);
+        gtk_list_store_set(store, &iter, 0, "..", -1);
+    }
 
     DIR* dir = opendir(path);
     if (dir) {
         struct dirent* entry;
         while ((entry = readdir(dir)) != NULL) {
             if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                GtkTreeIter iter;
                 gtk_list_store_append(store, &iter);
                 gtk_list_store_set(store, &iter, 0, entry->d_name, -1);
             }
@@ -168,7 +180,7 @@ void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColu
 
         if (selected_dir) {
             char new_path[512];
-            if (strcmp(selected_dir, "..") == 0) {
+            if (strcmp(selected_dir, "..") == 0 && is_monitored_dir((char*)user_data)) {
                 // Navigate to the parent directory
                 strncpy(new_path, (char*)user_data, sizeof(new_path));
                 char* last_slash = strrchr(new_path, '/');
@@ -267,8 +279,9 @@ void add_watch_recursive(const char* path) {
 }
 
 GtkWidget* create_window(const char* root_path) {
+    const char* window_title = "File Monitor";
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+    gtk_window_set_title(GTK_WINDOW(window), window_title);
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
     GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
