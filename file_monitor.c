@@ -48,7 +48,7 @@ static gboolean on_directory_pane_toggle(GtkWidget* widget, GdkEventButton* even
         if (expanded) {
             gtk_paned_set_position(inner_paned, 0); // Minimize inner pan
         } else {
-            gtk_paned_set_position(inner_paned, 200); // Restore size of the inner pan
+            gtk_paned_set_position(inner_paned, 400); // Restore size of the inner pan
         }
         expanded = !expanded;
     }
