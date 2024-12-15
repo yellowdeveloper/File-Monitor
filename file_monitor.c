@@ -96,13 +96,6 @@ void add_directory_to_list(const char *directory) {
     gtk_widget_show(label);
 }
 
-void add_directory_to_list(const char *directory) {
-    GtkWidget *label = gtk_label_new(directory); // 디렉토리를 레이블로 표시
-    gtk_widget_set_halign(label, GTK_ALIGN_START); // 왼쪽 정렬
-    gtk_container_add(GTK_CONTAINER(directoryListBox), label); // 리스트 박스에 추가
-    gtk_widget_show(label); // 레이블 표시
-}
-
 // 로그 파일 초기화 함수
 void init_log_file(const char* path) {
     logFile = fopen(path, "a"); // 로그 파일 열기 (추가 모드)
