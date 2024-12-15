@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <gtk/gtk.h>
 #include <glib.h>
+#include <omp.h>
 
 #define EXT_SUCCESS 0
 #define EXT_ERR_TOO_FEW_ARGS 1
@@ -28,9 +29,12 @@ char* ProgramTitle = "file_monitor";
 FILE* logFile = NULL;
 GtkTextBuffer *log_buffer = NULL;
 GtkWidget* file_list = NULL;
-char monitoredDirs[512][512];
+char** monitoredDirs = NULL;
 int monitoredDirCount = 0;
 char logFilePath[512] = "";
+
+volatile bool keep_running = true;
+volatile bool logBufferDirty = false;
 
 void init_log_file(const char* path) {
     logFile = fopen(path, "a");
@@ -56,12 +60,35 @@ gboolean update_log_buffer(gpointer data) {
 }
 
 void log_event(const char* eventMessage) {
-    if (logFile) {
-        fprintf(logFile, "%s\n", eventMessage);
-        fflush(logFile);
+    static char logBuffer[8192] = "";
+    static size_t logBufferSize = 0;
+
+    size_t messageLength = strlen(eventMessage) + 1; // Include newline
+    if (logBufferSize + messageLength > sizeof(logBuffer) - 1) {
+        if (logFile) {
+            fprintf(logFile, "%s", logBuffer);
+            fflush(logFile);
+        }
+        logBufferSize = 0;
+        logBuffer[0] = '\0';
     }
 
+    strcat(logBuffer, eventMessage);
+    strcat(logBuffer, "\n");
+    logBufferSize += messageLength;
+
+    logBufferDirty = true;
     g_idle_add(update_log_buffer, g_strdup(eventMessage));
+}
+
+void flush_log_buffer() {
+    static char logBuffer[8192] = "";
+    if (logFile && logBufferDirty) {
+        fprintf(logFile, "%s", logBuffer);
+        fflush(logFile);
+        logBuffer[0] = '\0';
+        logBufferDirty = false;
+    }
 }
 
 void read_config(const char* configPath) {
@@ -86,9 +113,10 @@ void read_config(const char* configPath) {
     config_setting_t* directories = config_lookup(&cfg, "monitor_directories");
     if (directories && config_setting_is_array(directories)) {
         monitoredDirCount = config_setting_length(directories);
-        for (int i = 0; i < monitoredDirCount && i < 512; ++i) {
+        monitoredDirs = malloc(monitoredDirCount * sizeof(char*));
+        for (int i = 0; i < monitoredDirCount; ++i) {
             const char* dir = config_setting_get_string_elem(directories, i);
-            strncpy(monitoredDirs[i], dir, sizeof(monitoredDirs[i]));
+            monitoredDirs[i] = strdup(dir);
         }
     } else {
         fprintf(stderr, "Missing or invalid 'monitor_directories' in config file\n");
@@ -141,14 +169,29 @@ void process_event(const struct inotify_event* watchEvent) {
 }
 
 void* inotify_thread(void* arg) {
-    char buffer[4096];
+    size_t bufferSize = 4096;
+    char* buffer = malloc(bufferSize);
+    if (!buffer) {
+        perror("Failed to allocate buffer");
+        return NULL;
+    }
+
     const struct inotify_event* watchEvent;
 
-    while (1) {
-        int readLength = read(IeventQueue, buffer, sizeof(buffer));
+    while (keep_running) {
+        int readLength = read(IeventQueue, buffer, bufferSize);
         if (readLength == -1) {
             perror("Error reading inotify instance");
             break;
+        }
+
+        if (readLength == bufferSize) {
+            bufferSize *= 2;
+            buffer = realloc(buffer, bufferSize);
+            if (!buffer) {
+                perror("Failed to reallocate buffer");
+                break;
+            }
         }
 
         for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
@@ -157,6 +200,9 @@ void* inotify_thread(void* arg) {
             buffPointer += sizeof(struct inotify_event) + watchEvent->len;
         }
     }
+
+    flush_log_buffer();
+    free(buffer);
     return NULL;
 }
 
@@ -220,6 +266,10 @@ GtkWidget* create_window() {
     return window;
 }
 
+void signal_handler(int signum) {
+    keep_running = false;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "USAGE: file_monitor CONFIG_PATH\n");
@@ -235,6 +285,7 @@ int main(int argc, char** argv) {
         exit(EXT_ERR_INIT_INOTIFY);
     }
 
+    #pragma omp parallel for
     for (int i = 0; i < monitoredDirCount; ++i) {
         add_watch_recursive(monitoredDirs[i]);
     }
@@ -243,6 +294,8 @@ int main(int argc, char** argv) {
 
     GtkWidget* window = create_window();
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    signal(SIGINT, signal_handler);
 
     pthread_t thread;
     if (pthread_create(&thread, NULL, inotify_thread, NULL) != 0) {
@@ -253,8 +306,15 @@ int main(int argc, char** argv) {
     gtk_widget_show_all(window);
     gtk_main();
 
-    pthread_cancel(thread);
+    keep_running = false;
     pthread_join(thread, NULL);
+
+    flush_log_buffer();
+
+    for (int i = 0; i < monitoredDirCount; ++i) {
+        free(monitoredDirs[i]);
+    }
+    free(monitoredDirs);
 
     if (logFile) fclose(logFile);
     return EXT_SUCCESS;
