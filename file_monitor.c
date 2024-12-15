@@ -40,9 +40,10 @@ char* dynamicLogBuffer = NULL;
 size_t dynamicLogBufferSize = 0;
 size_t dynamicLogBufferCapacity = 8192;
 
-bool is_monitored_dir(const char* path) {
+bool is_child_of_monitored_dir(const char* path) {
     for (int i = 0; i < monitoredDirCount; ++i) {
-        if (strcmp(monitoredDirs[i], path) == 0) {
+        size_t len = strlen(monitoredDirs[i]);
+        if (strncmp(monitoredDirs[i], path, len) == 0 && path[len] == '/') {
             return true;
         }
     }
@@ -149,8 +150,8 @@ void update_file_list(const char* path) {
     GtkListStore* store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
     gtk_list_store_clear(store);
 
-    // Add '..' only if the directory is monitored
-    if (is_monitored_dir(path)) {
+    // Add '..' only if the directory is a child of a monitored directory
+    if (is_child_of_monitored_dir(path)) {
         GtkTreeIter iter;
         gtk_list_store_append(store, &iter);
         gtk_list_store_set(store, &iter, 0, "..", -1);
@@ -180,7 +181,7 @@ void on_row_activated(GtkTreeView* tree_view, GtkTreePath* path, GtkTreeViewColu
 
         if (selected_dir) {
             char new_path[512];
-            if (strcmp(selected_dir, "..") == 0 && is_monitored_dir((char*)user_data)) {
+            if (strcmp(selected_dir, "..") == 0 && is_child_of_monitored_dir((char*)user_data)) {
                 // Navigate to the parent directory
                 strncpy(new_path, (char*)user_data, sizeof(new_path));
                 char* last_slash = strrchr(new_path, '/');
