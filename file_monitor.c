@@ -267,10 +267,8 @@ void add_watch_recursive(const char* path) {
 }
 
 GtkWidget* create_window(const char* root_path) {
-    char window_title[512];
-    snprintf(window_title, sizeof(window_title), "File Monitor - %s", root_path);
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), window_title);
+    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
     GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
@@ -281,11 +279,13 @@ GtkWidget* create_window(const char* root_path) {
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
 
     GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
+    char files_pane_title[512];
+    snprintf(files_pane_title, sizeof(files_pane_title), "Directory: %s", root_path);
     file_list = gtk_tree_view_new();
     GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
     GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
-    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
+    GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes(files_pane_title, renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
     gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
 
