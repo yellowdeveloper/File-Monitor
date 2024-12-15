@@ -33,6 +33,7 @@ char filteredExtension[64] = "";     // 필터링할 확장자 (설정에서 읽
 GtkWidget *logWindow;    // 로그 출력용 창
 GtkWidget *logTextView;  // 로그 출력용 텍스트 뷰
 GtkTextBuffer *logBuffer; // 텍스트 버퍼
+GtkWidget *directoryListBox;
 
 // 디렉토리와 watch descriptor (wd)의 매핑 테이블
 typedef struct {
@@ -42,6 +43,13 @@ typedef struct {
 
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
 int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
+
+void add_directory_to_list(const char *directory) {
+    GtkWidget *label = gtk_label_new(directory); // 디렉토리를 레이블로 표시
+    gtk_widget_set_halign(label, GTK_ALIGN_START); // 왼쪽 정렬
+    gtk_container_add(GTK_CONTAINER(directoryListBox), label); // 리스트 박스에 추가
+    gtk_widget_show(label); // 레이블 표시
+}
 
 // 로그 파일 초기화 함수
 void init_log_file(const char* path) {
@@ -61,13 +69,17 @@ void init_log_ui() {
     gtk_window_set_title(GTK_WINDOW(logWindow), "File Monitor Logs");
     gtk_window_set_default_size(GTK_WINDOW(logWindow), 800, 600);
 
-    // 상단에 새로운 영역을 위한 레이블 생성
-    GtkWidget *topLabel = gtk_label_new("File Monitor - Monitoring Status");
-    gtk_widget_set_halign(topLabel, GTK_ALIGN_CENTER);
+    // 상단에 디렉토리 목록을 보여줄 박스 생성
+    GtkWidget *topLabel = gtk_label_new("Monitoring Directories:");
+    gtk_widget_set_halign(topLabel, GTK_ALIGN_START);
     gtk_widget_set_margin_top(topLabel, 10);
-    gtk_widget_set_margin_bottom(topLabel, 10);
 
-    // 로그 출력을 위한 텍스트 뷰 생성
+    directoryListBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 박스
+    GtkWidget *topArea = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 상단 영역
+    gtk_box_pack_start(GTK_BOX(topArea), topLabel, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(topArea), directoryListBox, TRUE, TRUE, 0);
+
+    // 하단에 로그 출력을 위한 텍스트 뷰 생성
     logTextView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE); // 읽기 전용
     logBuffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
@@ -77,13 +89,12 @@ void init_log_ui() {
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrollWindow), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_container_add(GTK_CONTAINER(scrollWindow), logTextView);
 
-    // 수직 박스(상자) 생성
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 방향, 간격 5px
-    gtk_container_add(GTK_CONTAINER(logWindow), vbox);
+    // 전체 레이아웃 구성
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5); // 수직 레이아웃 박스
+    gtk_box_pack_start(GTK_BOX(vbox), topArea, FALSE, FALSE, 0); // 상단 영역 추가
+    gtk_box_pack_end(GTK_BOX(vbox), scrollWindow, TRUE, TRUE, 0); // 하단 로그 창 추가
 
-    // 상자에 위젯 추가 (위: 레이블, 아래: 텍스트 뷰)
-    gtk_box_pack_start(GTK_BOX(vbox), topLabel, FALSE, FALSE, 0); // 상단 레이블 추가
-    gtk_box_pack_end(GTK_BOX(vbox), scrollWindow, TRUE, TRUE, 0); // 하단 텍스트 뷰 추가
+    gtk_container_add(GTK_CONTAINER(logWindow), vbox); // 메인 윈도우에 레이아웃 추가
 
     // 창 닫기 이벤트 처리
     g_signal_connect(logWindow, "destroy", G_CALLBACK(gtk_main_quit), NULL);
@@ -174,42 +185,41 @@ void read_config(const char* configPath, char monitoredDirs[][512], int* dirCoun
 }
 
 // 디렉토리 감시 추가 함수 (하위 디렉토리도 포함)
-void add_watch_recursive(const char* path) {
-    DIR* dir = opendir(path);  // 디렉토리 열기
+void add_watch_recursive(const char *path) {
+    DIR *dir = opendir(path);
     if (!dir) {
         perror("Error opening directory");
-        return;  // 디렉토리 열기 실패 시 리턴
+        return;
     }
 
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) { // 디렉토리 엔트리 읽기
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;  // '.'과 '..'은 무시
+            continue;
         }
 
         char subPath[512];
-        snprintf(subPath, sizeof(subPath), "%s/%s", path, entry->d_name); // 하위 디렉토리 경로 생성
+        snprintf(subPath, sizeof(subPath), "%s/%s", path, entry->d_name);
 
         struct stat pathStat;
-        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) { // 디렉토리인지 확인
-            add_watch_recursive(subPath); // 하위 디렉토리 재귀적으로 감시 추가
+        if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) {
+            add_watch_recursive(subPath);
         }
     }
 
-    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE_SELF); // inotify로 감시 추가
+    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE_SELF);
     if (wd == -1) {
-        fprintf(stderr, "Error adding watch for %s\n", path); // 감시 추가 실패 시 오류 메시지 출력
-    }
-    else {
-        // watch descriptor와 디렉토리 매핑 저장
-        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512); // 디렉토리 경로 저장
-        watchDescriptors[watchDescriptorCount].wd = wd; // watch descriptor 저장
-        watchDescriptorCount++; // watch descriptor 개수 증가
+        fprintf(stderr, "Error adding watch for %s\n", path);
+    } else {
+        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512);
+        watchDescriptors[watchDescriptorCount].wd = wd;
+        watchDescriptorCount++;
 
-        printf("Watching: %s\n", path); // 감시 시작 디렉토리 출력
+        printf("Watching: %s\n", path); // 콘솔에 출력
+        add_directory_to_list(path); // 디렉토리 목록에 추가
     }
 
-    closedir(dir); // 디렉토리 닫기
+    closedir(dir);
 }
 
 // watch descriptor를 경로로 변환하는 함수
