@@ -113,8 +113,14 @@ void update_file_list(const char* path) {
         return;
     }
 
-    GtkListStore* model = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
-    gtk_list_store_clear(model);
+    GtkTreeModel* model = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(file_list)));
+    if (GTK_IS_LIST_STORE(model)) {
+        fprintf(stderr, "Error: file_list does not have a valid GtkListStore\n");
+        return;
+    }
+
+    GtkListStore* store = GTK_LIST_STORE(model);
+    gtk_list_store_clear(store);
 
     DIR* dir = opendir(path);
     if (dir) {
