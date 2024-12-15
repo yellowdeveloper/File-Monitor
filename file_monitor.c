@@ -256,6 +256,24 @@ void process_event(const struct inotify_event* watchEvent) {
     }
 }
 
+void* inotify_thread(void* arg) {
+    char buffer[4096]; // 이벤트를 받을 버퍼
+
+    while (1) {
+        int readLength = read(IeventQueue, buffer, sizeof(buffer)); // inotify 이벤트 읽기
+        if (readLength == -1) {
+            fprintf(stderr, "Error reading from inotify instance\n");
+            exit(EXT_ERR_READ_INOTIFY); // 이벤트 읽기 실패 시 종료
+        }
+
+        for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
+            const struct inotify_event* watchEvent = (const struct inotify_event*)buffPointer; // 이벤트 처리
+            process_event(watchEvent);
+            buffPointer += sizeof(struct inotify_event) + watchEvent->len; // 버퍼 이동
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) { // 인자가 부족한 경우
         fprintf(stderr, "USAGE: file_monitor CONFIG_PATH\n");
@@ -281,20 +299,8 @@ int main(int argc, char** argv) {
         add_watch_recursive(monitoredDirs[i]); // 디렉토리 감시 추가
     }
 
-    char buffer[4096]; // 이벤트를 받을 버퍼
-    while (1) {
-        int readLength = read(IeventQueue, buffer, sizeof(buffer)); // inotify 이벤트 읽기
-        if (readLength == -1) {
-            fprintf(stderr, "Error reading from inotify instance\n");
-            exit(EXT_ERR_READ_INOTIFY); // 이벤트 읽기 실패 시 종료
-        }
-
-        for (char* buffPointer = buffer; buffPointer < buffer + readLength;) {
-            const struct inotify_event* watchEvent = (const struct inotify_event*)buffPointer; // 이벤트 처리
-            process_event(watchEvent);
-            buffPointer += sizeof(struct inotify_event) + watchEvent->len; // 버퍼 이동
-        }
-    }
+    pthread_t thread;
+    pthread_create(&thread, NULL, inotify_thread, NULL);
 
     gtk_main();
 
