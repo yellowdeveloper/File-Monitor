@@ -79,6 +79,7 @@ void show_directory_contents(const char *directory) {
 void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
         const char *directory = (const char *)data;
+        printf("Double-clicked directory: %s\n", directory); // 디버깅 출력
         show_directory_contents(directory); // 디렉토리 내용 표시
     }
 }
@@ -88,6 +89,9 @@ void add_directory_to_list(const char *directory) {
     gtk_widget_set_halign(label, GTK_ALIGN_START);
     gtk_widget_set_margin_start(label, 10);
     gtk_widget_set_margin_end(label, 10);
+
+    // 더블 클릭 이벤트를 감지하도록 이벤트 마스크 설정
+    gtk_widget_add_events(label, GDK_BUTTON_PRESS_MASK);
 
     // 더블 클릭 이벤트 연결
     g_signal_connect(label, "button-press-event", G_CALLBACK(on_directory_double_click), (gpointer)directory);
