@@ -40,18 +40,15 @@ char* dynamicLogBuffer = NULL;
 size_t dynamicLogBufferSize = 0;
 size_t dynamicLogBufferCapacity = 8192;
 
-static gboolean on_titlebar_double_click(GtkWidget* widget, GdkEventButton* event, gpointer user_data) {
-    static gboolean expanded = TRUE; // Track the expanded state
-    GtkPaned* paned = GTK_PANED(user_data);
-    GtkWidget* file_list_container = g_object_get_data(G_OBJECT(paned), "file_list_container");
+static gboolean on_directory_pane_toggle(GtkWidget* widget, GdkEventButton* event, gpointer user_data) {
+    static gboolean expanded = TRUE;
+    GtkPaned* inner_paned = GTK_PANED(user_data);
 
-    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // Double click with left mouse button
+    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) {
         if (expanded) {
-            gtk_widget_hide(file_list); // Hide the file list
-            gtk_paned_set_position(paned, 0); // Minimize the right pan
+            gtk_paned_set_position(inner_paned, 0); // Minimize inner pan
         } else {
-            gtk_widget_show(file_list); // Show the file list
-            gtk_paned_set_position(paned, 400); // Restore default size
+            gtk_paned_set_position(inner_paned, 200); // Restore size of the inner pan
         }
         expanded = !expanded;
     }
@@ -298,43 +295,46 @@ void add_watch_recursive(const char* path) {
 }
 
 GtkWidget* create_window(const char* root_path) {
-    const char* window_title = "File Monitor";
     GtkWidget* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), window_title);
+    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
     gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
 
-    GtkWidget* paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    GtkWidget* outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
     GtkWidget* scrolled_log = gtk_scrolled_window_new(NULL, NULL);
     GtkWidget* textView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(textView), FALSE);
     gtk_container_add(GTK_CONTAINER(scrolled_log), textView);
     log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
 
+    GtkWidget* right_pane = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+    // Create inner paned for directory listing
+    GtkWidget* inner_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
+    GtkWidget* directory_titlebar = gtk_event_box_new();
+    GtkWidget* directory_label = gtk_label_new("Directories");
+    gtk_container_add(GTK_CONTAINER(directory_titlebar), directory_label);
+    g_signal_connect(directory_titlebar, "button-press-event", G_CALLBACK(on_directory_pane_toggle), inner_paned);
+
     GtkWidget* scrolled_files = gtk_scrolled_window_new(NULL, NULL);
-    GtkWidget* file_list_container = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-
-    GtkWidget* titlebar = gtk_event_box_new();
-    GtkWidget* title_label = gtk_label_new("File List");
-    gtk_container_add(GTK_CONTAINER(titlebar), title_label);
-    gtk_box_pack_start(GTK_BOX(file_list_container), titlebar, FALSE, FALSE, 0);
-
-    g_signal_connect(titlebar, "button-press-event", G_CALLBACK(on_titlebar_double_click), paned);
-
-    g_object_set_data(G_OBJECT(paned), "file_list_container", file_list_container);
-
     file_list = gtk_tree_view_new();
     GtkListStore* store = gtk_list_store_new(1, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(file_list), GTK_TREE_MODEL(store));
     GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
     GtkTreeViewColumn* column = gtk_tree_view_column_new_with_attributes("Files", renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
+    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
 
-    gtk_box_pack_start(GTK_BOX(file_list_container), file_list, TRUE, TRUE, 0);
-    gtk_container_add(GTK_CONTAINER(scrolled_files), file_list_container);
+    // Pack into inner paned
+    gtk_paned_pack1(GTK_PANED(inner_paned), directory_titlebar, FALSE, FALSE);
+    gtk_paned_pack2(GTK_PANED(inner_paned), scrolled_files, TRUE, FALSE);
 
-    gtk_paned_pack1(GTK_PANED(paned), scrolled_log, TRUE, FALSE);
-    gtk_paned_pack2(GTK_PANED(paned), scrolled_files, TRUE, FALSE);
-    gtk_container_add(GTK_CONTAINER(window), paned);
+    // Add inner paned to the right pane
+    gtk_box_pack_start(GTK_BOX(right_pane), inner_paned, TRUE, TRUE, 0);
+
+    gtk_paned_pack1(GTK_PANED(outer_paned), scrolled_log, TRUE, FALSE);
+    gtk_paned_pack2(GTK_PANED(outer_paned), right_pane, TRUE, FALSE);
+
+    gtk_container_add(GTK_CONTAINER(window), outer_paned);
 
     update_file_list(root_path);
     return window;
