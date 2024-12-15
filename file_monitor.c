@@ -25,7 +25,7 @@
 #define EXT_ERR_LIBNOTIFY 6
 
 // global variables 
-// int IeventStatus = -1; // inotify watch status
+int IeventStatus = -1; // inotify watch status
 int IeventQueue = -1; // inotify waiting queue
 char* ProgramTitle = "file_monitor"; // title of program
 FILE* logFile = NULL; // log file pointer
