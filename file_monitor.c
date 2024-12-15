@@ -48,7 +48,7 @@ static gboolean on_directory_pane_toggle(GtkWidget* widget, GdkEventButton* even
         if (expanded) {
             gtk_paned_set_position(inner_paned, 0); // Minimize inner pan
         } else {
-            gtk_paned_set_position(inner_paned, 400); // Restore size of the inner pan
+            gtk_paned_set_position(inner_paned, 200); // Restore size of the inner pan
         }
         expanded = !expanded;
     }
@@ -324,14 +324,12 @@ GtkWidget* create_window(const char* root_path) {
     gtk_tree_view_append_column(GTK_TREE_VIEW(file_list), column);
     gtk_container_add(GTK_CONTAINER(scrolled_files), file_list);
 
-        // Add inner paned to the right pane
-    gtk_box_pack_start(GTK_BOX(right_pane), inner_paned, TRUE, TRUE, 0);
-
     // Pack into inner paned
     gtk_paned_pack1(GTK_PANED(inner_paned), directory_titlebar, FALSE, FALSE);
     gtk_paned_pack2(GTK_PANED(inner_paned), scrolled_files, TRUE, FALSE);
 
-
+    // Add inner paned to the right pane
+    gtk_box_pack_start(GTK_BOX(right_pane), inner_paned, TRUE, TRUE, 0);
 
     gtk_paned_pack1(GTK_PANED(outer_paned), scrolled_log, TRUE, FALSE);
     gtk_paned_pack2(GTK_PANED(outer_paned), right_pane, TRUE, FALSE);
