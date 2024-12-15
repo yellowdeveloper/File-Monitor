@@ -59,17 +59,6 @@ void apply_custom_css(GtkWidget *widget, const char *css) {
     g_object_unref(provider);
 }
 
-void initialize_css() {
-    const char *css = ".selected { background-color: #d1ecf1; border: 1px solid #0c5460; }";
-    GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider, css, -1, NULL);
-
-    gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
-                                              GTK_STYLE_PROVIDER(provider),
-                                              GTK_STYLE_PROVIDER_PRIORITY_USER);
-    g_object_unref(provider);
-}
-
 void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     if (event->type == GDK_BUTTON_PRESS && event->button == 1) { // 클릭 감지
         if (selectedDirectoryBox) {
@@ -83,6 +72,21 @@ void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer dat
         gtk_style_context_add_class(currentContext, "selected");
 
         selectedDirectoryBox = widget; // 선택된 디렉토리 상자 업데이트
+    }
+}
+
+void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    if (event->type == GDK_2BUTTON_PRESS && event->button == 1) { // 더블 클릭 감지
+        const char *clickedPath = (const char *)data;
+
+        // 클릭된 디렉토리의 절대 경로를 생성
+        char absolutePath[PATH_MAX];
+        realpath(clickedPath, absolutePath);
+
+        printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
+
+        // 디렉토리 내용을 표시
+        show_directory_contents(absolutePath);
     }
 }
 
