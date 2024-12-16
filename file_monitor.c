@@ -71,7 +71,7 @@ void event_sound() {
     ca_context_destroy(context);
 }
 
-void initialize_css() {
+void init_css() {
     const char *css = 
         ".selected { background-color: #d1ecf1; border: 1px solid #0c5460; }"
         ".highlighted { background-color: #ffcccc; border: 1px solid #cc0000; }";
@@ -516,7 +516,7 @@ int main(int argc, char** argv) {
     read_config(argv[1], monitoredDirs, &dirCount); // 설정 파일 읽기
     init_log_file(logFilePath); // 로그 파일 초기화
     init_log_ui();
-    initialize_css();
+    init_css();
 
     check_filtered_extension();  // 필터링 확장자 확인 (한 번만 출력)
 
