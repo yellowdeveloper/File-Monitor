@@ -342,7 +342,7 @@ void read_config(const char* configPath, char monitoredDirs[][512], int* dirCoun
 }
 
 // 하위 디렉토리인지 확인
-int is_subdirectory(const char *parent, const char *child) {
+int is_subdirectory(const char *child, const char *parent) {
     size_t parentLen = strlen(parent);
 
     // 경로가 정확히 동일한 경우 하위 디렉토리가 아님
@@ -386,7 +386,13 @@ void add_watch_recursive(const char *path) {
         watchDescriptorCount++;
 
         printf("Watching: %s\n", path); // 콘솔에 출력
-        add_directory_to_list(path); // 디렉토리 목록에 추가
+        
+        for (int i = 0; i < watchDescriptorCount; ++i) {
+            if (is_subdirectory(watchDescriptors[i].path, directory)) {
+                printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
+                return; // 상위 디렉토리가 이미 목록에 있음, 추가하지 않음
+            }
+        }
     }
 
     closedir(dir);
