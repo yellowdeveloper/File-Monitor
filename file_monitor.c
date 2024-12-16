@@ -341,8 +341,42 @@ void read_config(const char* configPath, char monitoredDirs[][512], int* dirCoun
     config_destroy(&cfg); // 설정 객체 해제
 }
 
+// 하위 디렉토리인지 확인
+int is_subdirectory(const char *parent, const char *child) {
+    size_t parentLen = strlen(parent);
+
+    // 경로가 정확히 동일한 경우 하위 디렉토리가 아님
+    if (strcmp(parent, child) == 0) {
+        return 0;
+    }
+
+    // `child`가 `parent`의 하위 디렉토리인지 확인
+    return (strncmp(parent, child, parentLen) == 0 && child[parentLen] == '/');
+}
+
 // 디렉토리 감시 추가 함수 (하위 디렉토리도 포함)
 void add_watch_recursive(const char *path) {
+    // 중복 또는 하위 디렉토리 확인
+    for (int i = 0; i < watchDescriptorCount; ++i) {
+        if (is_subdirectory(watchDescriptors[i].path, path) || is_subdirectory(path, watchDescriptors[i].path)) {
+            printf("Skipping subdirectory or duplicate: %s\n", path);
+            return; // 이미 상위 디렉토리가 감시 중이거나 중복된 디렉토리
+        }
+    }
+
+    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE_SELF);
+    if (wd == -1) {
+        fprintf(stderr, "Error adding watch for %s\n", path);
+        return;
+    } else {
+        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512);
+        watchDescriptors[watchDescriptorCount].wd = wd;
+        watchDescriptorCount++;
+
+        printf("Watching: %s\n", path); // 콘솔에 출력
+        add_directory_to_list(path); // 디렉토리 목록에 추가
+    }
+
     DIR *dir = opendir(path);
     if (!dir) {
         perror("Error opening directory");
@@ -362,18 +396,6 @@ void add_watch_recursive(const char *path) {
         if (stat(subPath, &pathStat) == 0 && S_ISDIR(pathStat.st_mode)) { // 하위 디렉토리 확인
             add_watch_recursive(subPath);
         }
-    }
-
-    int wd = inotify_add_watch(IeventQueue, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE_SELF);
-    if (wd == -1) {
-        fprintf(stderr, "Error adding watch for %s\n", path);
-    } else {
-        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512);
-        watchDescriptors[watchDescriptorCount].wd = wd;
-        watchDescriptorCount++;
-
-        printf("Watching: %s\n", path); // 콘솔에 출력
-        add_directory_to_list(path); // 디렉토리 목록에 추가
     }
 
     closedir(dir);
