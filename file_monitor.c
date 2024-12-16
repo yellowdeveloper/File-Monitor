@@ -154,8 +154,24 @@ void show_directory_contents(const char *directory) {
     closedir(dir);
 }
 
+int is_subdirectory(const char *parent, const char *child) {
+    // `child`가 `parent`의 하위 디렉토리인지 확인
+    size_t parentLen = strlen(parent);
+    return (strncmp(parent, child, parentLen) == 0 &&
+            (child[parentLen] == '/' || child[parentLen] == '\0'));
+}
+
+
 // 디렉토리 목록에 아이템 추가
 void add_directory_to_list(const char *directory) {
+    
+    for (int i = 0; i < watchDescriptorCount; ++i) {
+        if (is_subdirectory(watchDescriptors[i].path, directory)) {
+            printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
+            return; // 상위 디렉토리가 이미 목록에 있음, 추가하지 않음
+        }
+    }
+
     GtkWidget *eventBox = gtk_event_box_new();
     GtkWidget *label = gtk_label_new(directory);
 
