@@ -43,6 +43,8 @@ GtkWidget *selectedDirectoryBox = NULL;
 typedef struct {
     int wd;                           // watch descriptor
     char path[512];                   // 디렉토리 경로
+
+    GtkWidget *eventBox;
 } WatchDescriptor;
 
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
@@ -60,7 +62,9 @@ void apply_custom_css(GtkWidget *widget, const char *css) {
 }
 
 void initialize_css() {
-    const char *css = ".selected { background-color: #d1ecf1; border: 1px solid #0c5460; }";
+    const char *css = 
+        ".selected { background-color: #d1ecf1; border: 1px solid #0c5460; }"
+        ".highlighted { background-color: #ffcccc; border: 1px solid #cc0000; }";
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider, css, -1, NULL);
 
@@ -163,6 +167,13 @@ void add_directory_to_list(const char *directory) {
 
     gtk_container_add(GTK_CONTAINER(directoryListBox), eventBox);
     gtk_widget_show_all(eventBox);
+
+    for (int i = 0; i < watchDescriptorCount; ++i) {
+        if (strcmp(watchDescriptors[i].path, directory) == 0) {
+            watchDescriptors[i].eventBox = eventBox;
+            break;
+        }
+    }
 }
 
 // 로그 파일 초기화 함수
@@ -416,6 +427,17 @@ void process_event(const struct inotify_event* watchEvent) {
         const char* basePath = get_path_from_wd(watchEvent->wd); // watch descriptor에 해당하는 경로 얻기
         snprintf(fullPath, sizeof(fullPath), "%s/%s", basePath, watchEvent->name); // 전체 경로 생성
         snprintf(notificationMessage, sizeof(notificationMessage), "[%s] File %s: ", eventTime, fullPath);
+
+        for (int i = 0; i < watchDescriptorCount; ++i) {
+            if (strcmp(watchDescriptors[i].path, basePath) == 0 && watchDescriptors[i].eventBox) {
+                GtkStyleContext *context = gtk_widget_get_style_context(watchDescriptors[i].eventBox);
+                gtk_style_context_add_class(context, "highlighted");
+                
+                // 3초 후 강조 스타일 제거 (비동기 실행)
+                g_timeout_add(3000, (GSourceFunc)remove_highlight, watchDescriptors[i].eventBox);
+                break;
+            }
+        }
 
         // 이벤트 종류에 따라 메시지 작성
         if (watchEvent->mask & IN_CREATE) {
