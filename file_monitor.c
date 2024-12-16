@@ -368,13 +368,18 @@ void add_watch_recursive(const char *path) {
     if (wd == -1) {
         fprintf(stderr, "Error adding watch for %s\n", path);
         return;
-    } else {
-        strncpy(watchDescriptors[watchDescriptorCount].path, path, 512);
-        watchDescriptors[watchDescriptorCount].wd = wd;
-        watchDescriptorCount++;
+    }
 
-        printf("Watching: %s\n", path); // 콘솔에 출력
-        add_directory_to_list(path); // 디렉토리 목록에 추가
+    strncpy(watchDescriptors[watchDescriptorCount].path, path, 512);
+    watchDescriptors[watchDescriptorCount].wd = wd;
+    watchDescriptors[watchDescriptorCount].eventBox = NULL;
+    watchDescriptorCount++;
+
+    printf("Watching: %s\n", path); // 콘솔에 출력
+    add_directory_to_list(path); // 디렉토리 목록에 추가
+
+    if (strcmp(path, ".") != 0) { // 루트 디렉토리 제외
+        add_directory_to_list(path);
     }
 
     DIR *dir = opendir(path);
