@@ -15,6 +15,7 @@
 #include <gtk/gtk.h>
 #include <glib.h>
 #include <limits.h>
+#include <canberra.h>
 
 #define EXT_SUCCESS 0                // 성공 코드
 #define EXT_ERR_TOO_FEW_ARGS 1       // 인자 부족 오류 코드
@@ -50,6 +51,25 @@ typedef struct {
 
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
 int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
+
+void event_sound() {
+    ca_context *context = NULL;
+
+    // libcanberra 컨텍스트 초기화
+    if (ca_context_create(&context) < 0) {
+        fprintf(stderr, "Failed to create sound context\n");
+        return;
+    }
+
+    // 간단한 이벤트 사운드 재생 (기본 사운드 테마)
+    ca_context_play(context, 0,
+                    CA_PROP_EVENT_ID, "message-new-instant",
+                    CA_PROP_EVENT_DESCRIPTION, "File event notification",
+                    NULL);
+
+    // 컨텍스트 해제
+    ca_context_destroy(context);
+}
 
 void initialize_css() {
     const char *css = 
@@ -460,6 +480,8 @@ void process_event(const struct inotify_event* watchEvent) {
         if (difftime(currentTime, lastEventTime) >= 1) {
             lastEventTime = currentTime; // 마지막 이벤트 시간 갱신
             log_event(notificationMessage); // 로그에 이벤트 기록
+
+            event_sound();
         }
     }
 }
