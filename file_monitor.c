@@ -376,7 +376,6 @@ void add_watch_recursive(const char *path) {
     watchDescriptorCount++;
 
     printf("Watching: %s\n", path); // 콘솔에 출력
-    add_directory_to_list(path); // 디렉토리 목록에 추가
 
     if (strcmp(path, ".") != 0) { // 루트 디렉토리 제외
         add_directory_to_list(path);
