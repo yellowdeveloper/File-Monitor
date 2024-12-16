@@ -100,8 +100,9 @@ void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointe
 
         printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
 
-        if (gtk_style_context_has_class(currentContext, "highlighted")) {
-            gtk_style_context_remove_class(currentContext, "highlighted");
+        GtkStyleContext *context = gtk_widget_get_style_context(widget);
+        if (gtk_style_context_has_class(context, "highlighted")) {
+            gtk_style_context_remove_class(context, "highlighted");
         }
         
         // 디렉토리 내용을 표시
