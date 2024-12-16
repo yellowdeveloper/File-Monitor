@@ -86,10 +86,6 @@ void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer dat
         GtkStyleContext *currentContext = gtk_widget_get_style_context(widget);
         gtk_style_context_add_class(currentContext, "selected");
 
-        if (gtk_style_context_has_class(currentContext, "highlighted")) {
-            gtk_style_context_remove_class(currentContext, "highlighted");
-        }
-
         selectedDirectoryBox = widget; // 선택된 디렉토리 상자 업데이트
     }
 }
@@ -104,6 +100,10 @@ void on_directory_double_click(GtkWidget *widget, GdkEventButton *event, gpointe
 
         printf("Double-clicked directory: %s\n", absolutePath); // 디버깅 출력
 
+        if (gtk_style_context_has_class(currentContext, "highlighted")) {
+            gtk_style_context_remove_class(currentContext, "highlighted");
+        }
+        
         // 디렉토리 내용을 표시
         show_directory_contents(absolutePath);
     }
