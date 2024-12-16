@@ -31,6 +31,7 @@ FILE* logFile = NULL;                // 로그 파일 포인터
 char logFilePath[512];               // 로그 파일 경로 (설정에서 읽음)
 char filteredExtension[64] = "";     // 필터링할 확장자 (설정에서 읽음)
 
+// gtk variables
 GtkWidget *logWindow;
 GtkWidget *logTextView;
 GtkTextBuffer *logBuffer;
@@ -156,13 +157,6 @@ void show_directory_contents(const char *directory) {
 
 // 디렉토리 목록에 아이템 추가
 void add_directory_to_list(const char *directory) {
-    for (int i = 0; i < watchDescriptorCount; ++i) {
-        if (is_subdirectory(watchDescriptors[i].path, directory)) {
-            printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
-            return; // 상위 디렉토리가 이미 목록에 있음, 추가하지 않음
-        }
-    }
-    
     GtkWidget *eventBox = gtk_event_box_new();
     GtkWidget *label = gtk_label_new(directory);
 
@@ -346,19 +340,6 @@ void read_config(const char* configPath, char monitoredDirs[][512], int* dirCoun
     }
 
     config_destroy(&cfg); // 설정 객체 해제
-}
-
-// 하위 디렉토리인지 확인
-int is_subdirectory(const char *child, const char *parent) {
-    size_t parentLen = strlen(parent);
-
-    // 경로가 정확히 동일한 경우 하위 디렉토리가 아님
-    if (strcmp(parent, child) == 0) {
-        return 0;
-    }
-
-    // `child`가 `parent`의 하위 디렉토리인지 확인
-    return (strncmp(parent, child, parentLen) == 0 && child[parentLen] == '/');
 }
 
 // 디렉토리 감시 추가 함수 (하위 디렉토리도 포함)
