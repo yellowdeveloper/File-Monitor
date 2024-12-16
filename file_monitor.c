@@ -156,6 +156,13 @@ void show_directory_contents(const char *directory) {
 
 // 디렉토리 목록에 아이템 추가
 void add_directory_to_list(const char *directory) {
+    for (int i = 0; i < watchDescriptorCount; ++i) {
+        if (is_subdirectory(watchDescriptors[i].path, directory)) {
+            printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
+            return; // 상위 디렉토리가 이미 목록에 있음, 추가하지 않음
+        }
+    }
+    
     GtkWidget *eventBox = gtk_event_box_new();
     GtkWidget *label = gtk_label_new(directory);
 
@@ -386,13 +393,7 @@ void add_watch_recursive(const char *path) {
         watchDescriptorCount++;
 
         printf("Watching: %s\n", path); // 콘솔에 출력
-        
-        for (int i = 0; i < watchDescriptorCount; ++i) {
-            if (is_subdirectory(watchDescriptors[i].path, directory)) {
-                printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
-                return; // 상위 디렉토리가 이미 목록에 있음, 추가하지 않음
-            }
-        }
+        add_directory_to_list(path); // 디렉토리 목록에 추가
     }
 
     closedir(dir);
