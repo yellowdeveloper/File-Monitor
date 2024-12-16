@@ -74,12 +74,6 @@ void apply_custom_css(GtkWidget *widget, const char *css) {
     g_object_unref(provider);
 }
 
-gboolean remove_highlight(GtkWidget *eventBox) {
-    GtkStyleContext *context = gtk_widget_get_style_context(eventBox);
-    gtk_style_context_remove_class(context, "highlighted");
-    return FALSE; // 단일 호출로 끝냄
-}
-
 void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     if (event->type == GDK_BUTTON_PRESS && event->button == 1) { // 클릭 감지
         if (selectedDirectoryBox) {
@@ -91,6 +85,10 @@ void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer dat
         // 새로 선택된 디렉토리 상자에 스타일 추가
         GtkStyleContext *currentContext = gtk_widget_get_style_context(widget);
         gtk_style_context_add_class(currentContext, "selected");
+
+        if (gtk_style_context_has_class(currentContext, "highlighted")) {
+            gtk_style_context_remove_class(currentContext, "highlighted");
+        }
 
         selectedDirectoryBox = widget; // 선택된 디렉토리 상자 업데이트
     }
@@ -438,9 +436,6 @@ void process_event(const struct inotify_event* watchEvent) {
             if (strcmp(watchDescriptors[i].path, basePath) == 0 && watchDescriptors[i].eventBox) {
                 GtkStyleContext *context = gtk_widget_get_style_context(watchDescriptors[i].eventBox);
                 gtk_style_context_add_class(context, "highlighted");
-                
-                // 3초 후 강조 스타일 제거 (비동기 실행)
-                g_timeout_add(3000, (GSourceFunc)remove_highlight, watchDescriptors[i].eventBox);
                 break;
             }
         }
