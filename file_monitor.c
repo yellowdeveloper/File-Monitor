@@ -157,6 +157,11 @@ void show_directory_contents(const char *directory) {
 int is_subdirectory(const char *parent, const char *child) {
     // `child`가 `parent`의 하위 디렉토리인지 확인
     size_t parentLen = strlen(parent);
+
+    if (strcmp(parent, child) == 0) {
+        return 0;
+    }
+
     return (strncmp(parent, child, parentLen) == 0 &&
             (child[parentLen] == '/' || child[parentLen] == '\0'));
 }
@@ -164,7 +169,7 @@ int is_subdirectory(const char *parent, const char *child) {
 
 // 디렉토리 목록에 아이템 추가
 void add_directory_to_list(const char *directory) {
-    
+
     for (int i = 0; i < watchDescriptorCount; ++i) {
         if (is_subdirectory(watchDescriptors[i].path, directory)) {
             printf("Skipping subdirectory: %s (parent: %s)\n", directory, watchDescriptors[i].path);
