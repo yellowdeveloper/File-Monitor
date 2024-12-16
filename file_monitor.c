@@ -50,17 +50,6 @@ typedef struct {
 WatchDescriptor watchDescriptors[512];  // watch descriptor 배열
 int watchDescriptorCount = 0;           // 등록된 watch descriptor의 개수
 
-void apply_custom_css(GtkWidget *widget, const char *css) {
-    GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider, css, -1, NULL);
-
-    GtkStyleContext *context = gtk_widget_get_style_context(widget);
-    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
-                                   GTK_STYLE_PROVIDER_PRIORITY_USER);
-
-    g_object_unref(provider);
-}
-
 void initialize_css() {
     const char *css = 
         ".selected { background-color: #d1ecf1; border: 1px solid #0c5460; }"
@@ -72,6 +61,23 @@ void initialize_css() {
                                               GTK_STYLE_PROVIDER(provider),
                                               GTK_STYLE_PROVIDER_PRIORITY_USER);
     g_object_unref(provider);
+}
+
+void apply_custom_css(GtkWidget *widget, const char *css) {
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider, css, -1, NULL);
+
+    GtkStyleContext *context = gtk_widget_get_style_context(widget);
+    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
+                                   GTK_STYLE_PROVIDER_PRIORITY_USER);
+
+    g_object_unref(provider);
+}
+
+gboolean remove_highlight(GtkWidget *eventBox) {
+    GtkStyleContext *context = gtk_widget_get_style_context(eventBox);
+    gtk_style_context_remove_class(context, "highlighted");
+    return FALSE; // 단일 호출로 끝냄
 }
 
 void on_directory_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
